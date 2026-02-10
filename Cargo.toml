@@ -1,6 +1,6 @@
 [package]
 name = "rbdc-mcp"
-version = "0.1.6"
+version = "0.1.7"
 edition = "2021"
 description = "MCP (Model Context Protocol) Server for RBDC - Execute SQL queries and modifications"
 authors = ["rbdc team"]
@@ -17,7 +17,7 @@ path = "src/main.rs"
 
 [dependencies]
 
-rmcp = { version = "0.14.0",features = ["server", "transport-io"]}
+rmcp = { version = "0.15.0",features = ["server", "transport-io"]}
 
 anyhow = "1.0"
 tokio = { version = "1.0", features = ["full"] }
