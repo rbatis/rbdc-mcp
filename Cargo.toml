@@ -29,17 +29,17 @@ serde_json = "1.0"
 schemars = "0.8"
 clap = { version = "4.0", features = ["derive"] }
 log = "0.4"
-rbs = { version = "4.6" }
+rbs = { version = "4" }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "std", "fmt"] }
 
 # RBDC dependencies
-rbdc = { version = "4.6.0" }
-rbdc-sqlite = { version = "4.6.0" }
-rbdc-mysql = { version = "4.6.0" }
-rbdc-pg = { version = "4.6.0" }
-rbdc-mssql = { version = "4.6.0" }
-rbdc-pool-fast = { version = "4.6.0" }
+rbdc = { version = "4.7.0" }
+rbdc-sqlite = { version = "4.7.0" }
+rbdc-mysql = { version = "4.7.0" }
+rbdc-pg = { version = "4.7.0" }
+rbdc-mssql = { version = "4.7.0" }
+rbdc-pool-fast = { version = "4.7.0" }
 
 
 

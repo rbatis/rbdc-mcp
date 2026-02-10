@@ -2,7 +2,7 @@
 //! 
 //! Responsible for managing different types of database connections
 
-use anyhow::{anyhow, Result};
+use anyhow::{Ok, Result, anyhow};
 use rbdc::db::{Connection, Driver};
 use rbdc::pool::{ConnectionManager, Pool};
 use rbdc_pool_fast::FastPool;
@@ -72,13 +72,11 @@ impl DatabaseManager {
     }
 
     /// Execute query and return result set
-    pub async fn execute_query(&self, sql: &str, params: Vec<Value>) -> Result<Vec<Value>> {
+    pub async fn execute_query(&self, sql: &str, params: Vec<Value>) -> Result<Value> {
         let mut conn = self.pool.get().await
             .map_err(|e| anyhow!("Failed to get database connection: {}", e))?;
-            
         let result = conn.get_values(sql, params).await
             .map_err(|e| anyhow!("Query execution failed: {}", e))?;
-            
         Ok(result)
     }
 
