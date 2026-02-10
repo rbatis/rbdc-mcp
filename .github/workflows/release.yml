@@ -2,6 +2,8 @@ name: Release
 
 on:
   push:
+    branches:
+      - main
     tags:
       - 'v*'
   workflow_dispatch:
@@ -10,8 +12,67 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  check-version:
+    name: Check Version & Create Tag
+    runs-on: ubuntu-latest
+    outputs:
+      should_release: ${{ steps.version_check.outputs.should_release }}
+      new_tag: ${{ steps.version_check.outputs.new_tag }}
+      version: ${{ steps.version_check.outputs.version }}
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get Cargo.toml version
+        id: cargo_version
+        run: |
+          VERSION=$(grep '^version' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Cargo.toml version: $VERSION"
+
+      - name: Get latest git tag
+        id: git_tag
+        run: |
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          echo "latest_tag=$LATEST_TAG" >> $GITHUB_OUTPUT
+          echo "Latest git tag: $LATEST_TAG"
+
+      - name: Compare versions
+        id: version_check
+        run: |
+          CARGO_VERSION="${{ steps.cargo_version.outputs.version }}"
+          LATEST_TAG="${{ steps.git_tag.outputs.latest_tag }}"
+          LATEST_TAG_VERSION=${LATEST_TAG#v}
+
+          echo "Comparing: Cargo($CARGO_VERSION) vs Git($LATEST_TAG_VERSION)"
+
+          if [ "$CARGO_VERSION" != "$LATEST_TAG_VERSION" ]; then
+            echo "should_release=true" >> $GITHUB_OUTPUT
+            echo "new_tag=v$CARGO_VERSION" >> $GITHUB_OUTPUT
+            echo "version=$CARGO_VERSION" >> $GITHUB_OUTPUT
+            echo "New version detected, will create tag: v$CARGO_VERSION"
+          else
+            echo "should_release=false" >> $GITHUB_OUTPUT
+            echo "Version is up to date, no release needed"
+          fi
+
+      - name: Create and push tag
+        if: steps.version_check.outputs.should_release == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "${{ steps.version_check.outputs.new_tag }}" -m "Release ${{ steps.version_check.outputs.new_tag }}"
+          git push origin "${{ steps.version_check.outputs.new_tag }}"
+
   build:
     name: Build for ${{ matrix.target }}
+    needs: check-version
+    if: needs.check-version.outputs.should_release == 'true'
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -79,10 +140,11 @@ jobs:
 
   release:
     name: Create Release
-    needs: build
+    needs: [check-version, build]
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/')
-    
+    permissions:
+      contents: write
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -98,12 +160,12 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ github.ref_name }}
-          name: Release ${{ github.ref_name }}
+          tag_name: ${{ needs.check-version.outputs.new_tag }}
+          name: Release ${{ needs.check-version.outputs.new_tag }}
           draft: false
           prerelease: false
           body: |
-            ## Changes in ${{ github.ref_name }}
+            ## Changes in ${{ needs.check-version.outputs.new_tag }}
 
             ### Downloads
             - **Linux (x86_64)**: rbdc-mcp-linux-x86_64
@@ -112,7 +174,7 @@ jobs:
             - **macOS (Apple Silicon)**: rbdc-mcp-macos-aarch64
 
             ### Installation(Recommended use cargo)
-            0. cargo install --git https://github.com/rbatis/rbdc-mcp.git
+            0. cargo install --git https://github.com/rbatis/rbdc-mcp.git --tag ${{ needs.check-version.outputs.new_tag }}
             ### Installation(use binary)
             1. Download the appropriate binary for your platform
             2. Make it executable (Unix systems): `chmod +x rbdc-mcp-*`
