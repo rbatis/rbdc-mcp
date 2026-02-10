@@ -110,6 +110,7 @@ impl ServerHandler for RbdcDatabaseHandler {
             server_info: Implementation {
                 name: "RBDC MCP Server".to_string(),
                 version: env!("CARGO_PKG_VERSION").to_string(),
+                description: None,
                 icons: None,
                 title: None,
                 website_url: None,
