@@ -111,7 +111,9 @@ jobs:
             - **macOS (Intel)**: rbdc-mcp-macos-x86_64
             - **macOS (Apple Silicon)**: rbdc-mcp-macos-aarch64
 
-            ### Installation
+            ### Installation(Recommended use cargo)
+            0. cargo install --git https://github.com/rbatis/rbdc-mcp.git
+            ### Installation(use binary)
             1. Download the appropriate binary for your platform
             2. Make it executable (Unix systems): `chmod +x rbdc-mcp-*`
             3. Run: `./rbdc-mcp-* --help`
