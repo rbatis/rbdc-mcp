@@ -16,7 +16,15 @@
 
 ## 安装
 
-### 🚀 方式一：下载预编译二进制文件（推荐）
+### 🚀 方式一：通过 Cargo 安装（推荐）
+
+**前置要求：** 先安装 [Rust](https://rustup.rs/)。
+
+```bash
+cargo install --git https://github.com/rbatis/rbdc-mcp.git
+```
+
+### 📦 方式二：下载预编译二进制文件
 
 从 [GitHub Releases](https://github.com/rbatis/rbdc-mcp/releases) 下载适合你平台的最新版本：
 
@@ -27,56 +35,7 @@
 | **macOS (Apple Silicon)** | `rbdc-mcp-macos-aarch64` |
 | **Linux (x64)** | `rbdc-mcp-linux-x86_64` |
 
-**安装步骤：**
-
-**Windows:**
-1. 下载 `rbdc-mcp-windows-x86_64.exe`
-2. 重命名为 `rbdc-mcp.exe`
-3. 将文件移动到一个目录，如 `C:\tools\rbdc-mcp.exe`
-4. 添加到环境变量PATH：
-   - 右键"此电脑" → "属性" → "高级系统设置" → "环境变量"
-   - 在"系统变量"中找到"Path"，点击"编辑"
-   - 添加 `C:\tools` 到路径列表
-5. 重启命令行，测试：`rbdc-mcp --help`
-
-**macOS:**
-1. 下载对应文件：
-   - Intel芯片：`rbdc-mcp-macos-x86_64`
-   - Apple Silicon：`rbdc-mcp-macos-aarch64`
-2. 重命名并移动：
-   ```bash
-   mv rbdc-mcp-macos-* rbdc-mcp
-   chmod +x rbdc-mcp
-   sudo mv rbdc-mcp /usr/local/bin/
-   ```
-3. 测试：`rbdc-mcp --help`
-
-**Linux:**
-1. 下载 `rbdc-mcp-linux-x86_64`
-2. 重命名并安装：
-   ```bash
-   mv rbdc-mcp-linux-x86_64 rbdc-mcp
-   chmod +x rbdc-mcp
-   sudo mv rbdc-mcp /usr/local/bin/
-   ```
-3. 测试：`rbdc-mcp --help`
-
-### 🛠️ 方式二：通过 Cargo 安装
-
-**前置要求：** 先安装 [Rust](https://rustup.rs/)。
-
-```bash
-cargo install --git https://github.com/rbatis/rbdc-mcp.git
-```
-
-### 🔧 方式三：从源码构建
-
-```bash
-git clone https://github.com/rbatis/rbdc-mcp.git
-cd rbdc-mcp
-cargo build --release
-# 可执行文件：target/release/rbdc-mcp
-```
+下载后，将文件重命名为 `rbdc-mcp`（Windows 下为 `rbdc-mcp.exe`），并添加到系统 PATH 环境变量中即可。
 
 ## 🔧 快速设置
 

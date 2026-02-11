@@ -14,7 +14,15 @@ A database server based on [Model Context Protocol (MCP)](https://modelcontextpr
 
 ## Installation
 
-### 🚀 Method 1: Download Pre-built Binaries (Recommended)
+### 🚀 Method 1: Install via Cargo (Recommended)
+
+**Prerequisites:** Install [Rust](https://rustup.rs/) first.
+
+```bash
+cargo install --git https://github.com/rbatis/rbdc-mcp.git
+```
+
+### 📦 Method 2: Download Pre-built Binaries
 
 Download the latest release for your platform from [GitHub Releases](https://github.com/rbatis/rbdc-mcp/releases):
 
@@ -25,56 +33,7 @@ Download the latest release for your platform from [GitHub Releases](https://git
 | **macOS (Apple Silicon)** | `rbdc-mcp-macos-aarch64` |
 | **Linux (x64)** | `rbdc-mcp-linux-x86_64` |
 
-**Installation Steps:**
-
-**Windows:**
-1. Download (`rbdc-mcp-windows-x86_64.exe`)[https://github.com/rbatis/rbdc-mcp/releases]
-2. Rename to `rbdc-mcp.exe`
-3. Move to a directory, e.g., `C:\tools\rbdc-mcp.exe`
-4. Add to PATH environment variable:
-   - Right-click "This PC" → "Properties" → "Advanced system settings" → "Environment Variables"
-   - Find "Path" in "System variables", click "Edit"
-   - Add `C:\tools` to the path list
-5. Restart command prompt, test: `rbdc-mcp --help`
-
-**macOS:**
-1. Download the appropriate file:
-   - Intel chip: (`rbdc-mcp-macos-x86_64`)[https://github.com/rbatis/rbdc-mcp/releases]
-   - Apple Silicon: (`rbdc-mcp-macos-aarch64`)[https://github.com/rbatis/rbdc-mcp/releases]
-2. Rename and install:
-   ```bash
-   mv rbdc-mcp-macos-* rbdc-mcp
-   chmod +x rbdc-mcp
-   sudo mv rbdc-mcp /usr/local/bin/
-   ```
-3. Test: `rbdc-mcp --help`
-
-**Linux:**
-1. Download `rbdc-mcp-linux-x86_64`
-2. Rename and install:
-   ```bash
-   mv rbdc-mcp-linux-x86_64 rbdc-mcp
-   chmod +x rbdc-mcp
-   sudo mv rbdc-mcp /usr/local/bin/
-   ```
-3. Test: `rbdc-mcp --help`
-
-### 🛠️ Method 2: Install via Cargo
-
-**Prerequisites:** Install [Rust](https://rustup.rs/) first.
-
-```bash
-cargo install --git https://github.com/rbatis/rbdc-mcp.git
-```
-
-### 🔧 Method 3: Build from Source
-
-```bash
-git clone https://github.com/rbatis/rbdc-mcp.git
-cd rbdc-mcp
-cargo build --release
-# Executable: target/release/rbdc-mcp
-```
+After downloading, rename the file to `rbdc-mcp` (or `rbdc-mcp.exe` on Windows) and add it to your system PATH.
 
 ## 🔧 Quick Setup
 
