@@ -1,5 +1,6 @@
 use std::sync::Arc;
 use crate::db_manager::DatabaseManager;
+use crate::sql_guard::is_read_only_sql;
 
 use rmcp::{
     ErrorData as McpError, ServerHandler,
@@ -12,6 +13,7 @@ use rmcp::{
 #[derive(Clone)]
 pub struct RbdcDatabaseHandler {
     db_manager: Arc<DatabaseManager>,
+    read_only: bool,
     tool_router: ToolRouter<RbdcDatabaseHandler>,
 }
 
@@ -36,9 +38,10 @@ pub struct SqlExecParams {
 // Use tool_router macro to generate the tool router
 #[tool_router]
 impl RbdcDatabaseHandler {
-    pub fn new(db_manager: Arc<DatabaseManager>) -> Self {
+    pub fn new(db_manager: Arc<DatabaseManager>, read_only: bool) -> Self {
         Self {
             db_manager,
+            read_only,
             tool_router: Self::tool_router(),
         }
     }
@@ -55,6 +58,13 @@ impl RbdcDatabaseHandler {
         _context: RequestContext<RoleServer>,
         Parameters(params): Parameters<SqlQueryParams>,
     ) -> Result<CallToolResult, McpError> {
+        if !is_read_only_sql(&params.sql) {
+            return Err(McpError::invalid_params(
+                "sql_query only accepts single read-only SQL statements".to_string(),
+                None,
+            ));
+        }
+
         // Convert parameter types from serde_json::Value to rbs::Value
         let rbs_params = self.convert_params(&params.params);
 
@@ -74,6 +84,13 @@ impl RbdcDatabaseHandler {
         _context: RequestContext<RoleServer>,
         Parameters(params): Parameters<SqlExecParams>,
     ) -> Result<CallToolResult, McpError> {
+        if self.read_only {
+            return Err(McpError::invalid_params(
+                "sql_exec is disabled when server is started with --read-only".to_string(),
+                None,
+            ));
+        }
+
         // Convert parameter types from serde_json::Value to rbs::Value
         let rbs_params = self.convert_params(&params.params);
 
@@ -126,4 +143,4 @@ impl ServerHandler for RbdcDatabaseHandler {
     ) -> Result<InitializeResult, McpError> {
         Ok(self.get_info())
     }
-} 
+}

@@ -132,6 +132,7 @@ In Claude Desktop, try asking:
 | `--max-connections` | Maximum connection pool size | `1` |
 | `--timeout` | Connection timeout (seconds) | `30` |
 | `--log-level` | Log level (error/warn/info/debug) | `info` |
+| `--read-only` | Enforce read-only mode (rejects `sql_exec`) | `false` |
 
 ## 🛠️ Available Tools
 

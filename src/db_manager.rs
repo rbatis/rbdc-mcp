@@ -9,6 +9,7 @@ use rbdc_pool_fast::FastPool;
 use rbs::Value;
 use std::sync::Arc;
 use std::time::Duration;
+use crate::sql_guard::is_read_only_sql;
 
 /// Supported database types
 #[derive(Debug, Clone)]
@@ -73,6 +74,10 @@ impl DatabaseManager {
 
     /// Execute query and return result set
     pub async fn execute_query(&self, sql: &str, params: Vec<Value>) -> Result<Value> {
+        if !is_read_only_sql(sql) {
+            return Err(anyhow!("Read-only query validation failed"));
+        }
+
         let mut conn = self.pool.get().await
             .map_err(|e| anyhow!("Failed to get database connection: {}", e))?;
         let result = conn.get_values(sql, params).await
