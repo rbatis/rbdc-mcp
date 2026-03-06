@@ -136,6 +136,7 @@ cargo install --git https://github.com/rbatis/rbdc-mcp.git
 | `--max-connections` | 最大连接池大小 | `1` |
 | `--timeout` | 连接超时时间（秒） | `30` |
 | `--log-level` | 日志级别（error/warn/info/debug） | `info` |
+| `--read-only` | 强制只读模式（拒绝 `sql_exec`） | `false` |
 
 ## 🛠️ 可用工具
 
