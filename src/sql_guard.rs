@@ -1,44 +1,12 @@
 use std::borrow::Cow;
 
-const READ_ONLY_START_KEYWORDS: &[&str] = &[
-    "SELECT",
-    "SHOW",
-    "DESC",
-    "DESCRIBE",
-    "EXPLAIN",
-    "WITH",
-];
+const READ_ONLY_START_KEYWORDS: &[&str] =
+    &["SELECT", "SHOW", "DESC", "DESCRIBE", "EXPLAIN", "WITH"];
 
 const WRITE_KEYWORDS: &[&str] = &[
-    "INSERT",
-    "UPDATE",
-    "DELETE",
-    "UPSERT",
-    "REPLACE",
-    "MERGE",
-    "CREATE",
-    "ALTER",
-    "DROP",
-    "TRUNCATE",
-    "GRANT",
-    "REVOKE",
-    "COMMIT",
-    "ROLLBACK",
-    "BEGIN",
-    "START",
-    "VACUUM",
-    "ANALYZE",
-    "ATTACH",
-    "DETACH",
-    "PRAGMA",
-    "EXEC",
-    "EXECUTE",
-    "CALL",
-    "DO",
-    "SET",
-    "USE",
-    "LOCK",
-    "UNLOCK",
+    "INSERT", "UPDATE", "DELETE", "UPSERT", "REPLACE", "MERGE", "CREATE", "ALTER", "DROP",
+    "TRUNCATE", "GRANT", "REVOKE", "COMMIT", "ROLLBACK", "BEGIN", "START", "VACUUM", "ANALYZE",
+    "ATTACH", "DETACH", "PRAGMA", "EXEC", "EXECUTE", "CALL", "DO", "SET", "USE", "LOCK", "UNLOCK",
 ];
 
 fn is_ident_char(c: char) -> bool {
@@ -190,6 +158,11 @@ mod tests {
     }
 
     #[test]
+    fn allows_single_select_with_trailing_semicolon() {
+        assert!(is_read_only_sql("SELECT * FROM users;"));
+    }
+
+    #[test]
     fn rejects_delete() {
         assert!(!is_read_only_sql("DELETE FROM users WHERE id = 1"));
     }
@@ -209,5 +182,15 @@ mod tests {
         assert!(!is_read_only_sql(
             "WITH moved AS (DELETE FROM users RETURNING *) SELECT * FROM moved"
         ));
+    }
+
+    #[test]
+    fn rejects_empty_sql() {
+        assert!(!is_read_only_sql("   "));
+    }
+
+    #[test]
+    fn allows_select_with_write_keyword_in_identifier() {
+        assert!(is_read_only_sql("SELECT \"DELETE\" AS action"));
     }
 }
