@@ -136,13 +136,23 @@ cargo install --git https://github.com/rbatis/rbdc-mcp.git
 | `--max-connections` | 最大连接池大小 | `1` |
 | `--timeout` | 连接超时时间（秒） | `30` |
 | `--log-level` | 日志级别（error/warn/info/debug） | `info` |
-| `--read-only` | 强制只读模式（拒绝 `sql_exec`） | `false` |
+| `--read-only` | 强制只读模式；如果当前数据库会话无法验证为只读，启动会直接失败。 | `false` |
 
 ## 🛠️ 可用工具
 
-- **`sql_query`**: 安全执行SELECT查询
-- **`sql_exec`**: 执行INSERT/UPDATE/DELETE操作
+- **`sql_query`**: 安全执行单条只读 SQL 查询
+- **`sql_exec`**: 在非只读模式下执行 INSERT/UPDATE/DELETE 操作
 - **`db_status`**: 检查连接池状态
+
+## 只读模式
+
+`--read-only` 的目标是让数据库连接本身具备只读约束，而不仅仅是隐藏某个工具。现在如果服务器无法验证当前会话确实是只读，会在启动阶段直接失败。
+
+- **SQLite**: 使用类似 `sqlite://./database.db?mode=ro` 的 URI。如果 SQLite URL 没有显式只读参数，服务器会拒绝在 `--read-only` 模式下启动。
+- **PostgreSQL**: 服务器会检查 `SHOW transaction_read_only`，只有结果为 `on` 才允许启动。
+- **MySQL**: 服务器会检查 `@@session.transaction_read_only`（旧版本则回退到 `@@session.tx_read_only`），只有启用后才允许启动。
+- **MSSQL**: 服务器会检查 `DATABASEPROPERTYEX(DB_NAME(), 'Updateability')`，只有当前数据库返回 `READ_ONLY` 才允许启动。
+- **`sql_query`** 始终只接受单条只读 SQL 语句，并拒绝多语句或带写操作的输入。
 
 ## 📸 截图
 

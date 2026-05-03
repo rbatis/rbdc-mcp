@@ -132,13 +132,23 @@ In Claude Desktop, try asking:
 | `--max-connections` | Maximum connection pool size | `1` |
 | `--timeout` | Connection timeout (seconds) | `30` |
 | `--log-level` | Log level (error/warn/info/debug) | `info` |
-| `--read-only` | Enforce read-only mode (rejects `sql_exec`) | `false` |
+| `--read-only` | Enforce read-only mode and abort startup unless the current session can be validated as read-only. | `false` |
 
 ## 🛠️ Available Tools
 
-- **`sql_query`**: Execute SELECT queries safely
-- **`sql_exec`**: Execute INSERT/UPDATE/DELETE operations
+- **`sql_query`**: Execute single read-only SQL queries safely
+- **`sql_exec`**: Execute INSERT/UPDATE/DELETE operations when the server is not in read-only mode
 - **`db_status`**: Check connection pool status
+
+## Read-Only Mode
+
+`--read-only` is intended to make the database connection itself read-only, not just hide one tool. Startup now fails if the server cannot validate the current session as read-only for the selected engine.
+
+- **SQLite**: use a URI such as `sqlite://./database.db?mode=ro`. The server rejects `--read-only` if the SQLite URL is not explicitly read-only.
+- **PostgreSQL**: the server validates `SHOW transaction_read_only` and aborts startup unless it is `on`.
+- **MySQL**: the server validates `@@session.transaction_read_only` (or `@@session.tx_read_only` on older servers) and aborts startup unless it is enabled.
+- **MSSQL**: the server validates `DATABASEPROPERTYEX(DB_NAME(), 'Updateability')` and aborts startup unless the current database reports `READ_ONLY`.
+- **`sql_query`** always accepts only a single read-only SQL statement and rejects multi-statement or mutating input.
 
 ## 📸 Screenshots
 

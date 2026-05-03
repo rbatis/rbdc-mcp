@@ -12,6 +12,7 @@
 .vscode/
 /.vscode
 '.vscode'
+.codex/
 /.github
 
 
@@ -29,5 +30,4 @@ Cargo.lock
 
 #mac
 *.DS_Store
-
 

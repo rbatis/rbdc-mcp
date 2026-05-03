@@ -1,8 +1,8 @@
 use anyhow::Result;
 use clap::Parser;
 use std::sync::Arc;
-use tracing::{info, error};
-use tracing_subscriber::{EnvFilter};
+use tracing::{error, info};
+use tracing_subscriber::EnvFilter;
 
 mod db_manager;
 mod handler;
@@ -10,7 +10,7 @@ mod sql_guard;
 
 use crate::db_manager::DatabaseManager;
 use crate::handler::RbdcDatabaseHandler;
-use rmcp::{ServiceExt, transport::stdio};
+use rmcp::{transport::stdio, ServiceExt};
 
 /// Command line arguments
 #[derive(Parser, Debug)]
@@ -33,7 +33,7 @@ struct Args {
     #[arg(long, default_value = "info")]
     log_level: String,
 
-    /// Enforce read-only server mode (blocks sql_exec)
+    /// Enforce read-only server mode and abort startup if the current database session cannot be validated as read-only.
     #[arg(long, default_value_t = false)]
     read_only: bool,
 }
@@ -45,9 +45,11 @@ async fn main() -> Result<(), anyhow::Error> {
     // Initialize logging
     tracing_subscriber::fmt()
         .with_env_filter(
-            EnvFilter::from_default_env()
-                .add_directive(args.log_level.parse()
-                    .unwrap_or_else(|_| tracing::Level::INFO.into()))
+            EnvFilter::from_default_env().add_directive(
+                args.log_level
+                    .parse()
+                    .unwrap_or_else(|_| tracing::Level::INFO.into()),
+            ),
         )
         .with_writer(std::io::stderr)
         .with_ansi(false)
@@ -57,28 +59,46 @@ async fn main() -> Result<(), anyhow::Error> {
     info!("Database URL: {}", args.database_url);
     info!("Read-only mode: {}", args.read_only);
 
-    // Create database manager
-    let db_manager = DatabaseManager::new(&args.database_url)
-        .map_err(|e| {
-            error!("Failed to create database manager: {}", e);
-            anyhow::Error::msg(e.to_string())
-        })?;
-    
-    // Configure connection pool
-    db_manager.configure_pool(args.max_connections, args.timeout).await;
-    
-    // Test database connection
-    db_manager.test_connection().await
-        .map_err(|e| anyhow::Error::msg(format!("Database connection test failed: {}", e)))?;
-    
-    info!("Database connection test successful");
+    // Create database manager (no connection yet)
+    let db_manager = DatabaseManager::new(&args.database_url, args.read_only).map_err(|e| {
+        error!("Failed to create database manager: {}", e);
+        anyhow::Error::msg(e.to_string())
+    })?;
 
-    // Create RBDC database handler
-    let handler = RbdcDatabaseHandler::new(Arc::new(db_manager), args.read_only);
+    // Configure connection pool
+    db_manager
+        .configure_pool(args.max_connections, args.timeout)
+        .await;
+
+    let db_manager = Arc::new(db_manager);
+
+    // Test DB connection in background — do NOT block MCP startup.
+    // Claude Desktop's initialize request must be answered within ~60s or it times out.
+    {
+        let db = Arc::clone(&db_manager);
+        tokio::spawn(async move {
+            match db.test_connection().await {
+                Ok(()) => {
+                    info!("Database connection test successful");
+                    match db.validate_read_only_session().await {
+                        Ok(()) => {
+                            if let Some(notice) = db.read_only_startup_notice() {
+                                tracing::warn!("{}", notice);
+                            }
+                        }
+                        Err(e) => error!("Read-only session validation failed: {}", e),
+                    }
+                }
+                Err(e) => error!("Database connection test failed: {}", e),
+            }
+        });
+    }
+
+    // Start MCP server immediately so initialize is handled without delay
+    let handler = RbdcDatabaseHandler::new(db_manager);
 
     info!("Starting RBDC MCP Server...");
-    
-    // Start server
+
     let service = handler.serve(stdio()).await.inspect_err(|e| {
         error!("Server startup failed: {:?}", e);
     })?;

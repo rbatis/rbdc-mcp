@@ -1,19 +1,18 @@
-use std::sync::Arc;
 use crate::db_manager::DatabaseManager;
 use crate::sql_guard::is_read_only_sql;
+use std::sync::Arc;
 
 use rmcp::{
-    ErrorData as McpError, ServerHandler,
     handler::server::{router::tool::ToolRouter, wrapper::Parameters},
-    model::*, schemars,
+    model::*,
+    schemars,
     service::{RequestContext, RoleServer},
-    tool, tool_handler, tool_router,
+    tool, tool_handler, tool_router, ErrorData as McpError, ServerHandler,
 };
 
 #[derive(Clone)]
 pub struct RbdcDatabaseHandler {
     db_manager: Arc<DatabaseManager>,
-    read_only: bool,
     tool_router: ToolRouter<RbdcDatabaseHandler>,
 }
 
@@ -38,16 +37,16 @@ pub struct SqlExecParams {
 // Use tool_router macro to generate the tool router
 #[tool_router]
 impl RbdcDatabaseHandler {
-    pub fn new(db_manager: Arc<DatabaseManager>, read_only: bool) -> Self {
+    pub fn new(db_manager: Arc<DatabaseManager>) -> Self {
         Self {
             db_manager,
-            read_only,
             tool_router: Self::tool_router(),
         }
     }
 
     fn convert_params(&self, params: &[serde_json::Value]) -> Vec<rbs::Value> {
-        params.iter()
+        params
+            .iter()
             .map(|v| serde_json::from_value(v.clone()).unwrap_or_default())
             .collect()
     }
@@ -70,11 +69,15 @@ impl RbdcDatabaseHandler {
 
         match self.db_manager.execute_query(&params.sql, rbs_params).await {
             Ok(results) => {
-                let content = Content::json(results)
-                    .map_err(|e| McpError::internal_error(format!("Result serialization failed: {}", e), None))?;
+                let content = Content::json(results).map_err(|e| {
+                    McpError::internal_error(format!("Result serialization failed: {}", e), None)
+                })?;
                 Ok(CallToolResult::success(vec![content]))
             }
-            Err(e) => Err(McpError::internal_error(format!("SQL query failed: {}", e), None))
+            Err(e) => Err(McpError::internal_error(
+                format!("SQL query failed: {}", e),
+                None,
+            )),
         }
     }
 
@@ -84,9 +87,9 @@ impl RbdcDatabaseHandler {
         _context: RequestContext<RoleServer>,
         Parameters(params): Parameters<SqlExecParams>,
     ) -> Result<CallToolResult, McpError> {
-        if self.read_only {
+        if self.db_manager.read_only_enabled() {
             return Err(McpError::invalid_params(
-                "sql_exec is disabled when server is started with --read-only".to_string(),
+                "Read-only mode blocks SQL modifications. Configure the database itself for read-only access and use sql_query only for single read-only statements.".to_string(),
                 None,
             ));
         }
@@ -94,13 +97,21 @@ impl RbdcDatabaseHandler {
         // Convert parameter types from serde_json::Value to rbs::Value
         let rbs_params = self.convert_params(&params.params);
 
-        match self.db_manager.execute_modification(&params.sql, rbs_params).await {
+        match self
+            .db_manager
+            .execute_modification(&params.sql, rbs_params)
+            .await
+        {
             Ok(result) => {
-                let content = Content::json(result)
-                    .map_err(|e| McpError::internal_error(format!("Result serialization failed: {}", e), None))?;
+                let content = Content::json(result).map_err(|e| {
+                    McpError::internal_error(format!("Result serialization failed: {}", e), None)
+                })?;
                 Ok(CallToolResult::success(vec![content]))
             }
-            Err(e) => Err(McpError::internal_error(format!("SQL execution failed: {}", e), None))
+            Err(e) => Err(McpError::internal_error(
+                format!("SQL execution failed: {}", e),
+                None,
+            )),
         }
     }
 
@@ -110,8 +121,9 @@ impl RbdcDatabaseHandler {
         _context: RequestContext<RoleServer>,
     ) -> Result<CallToolResult, McpError> {
         let status = self.db_manager.get_pool_state().await;
-        let content = Content::json(status)
-            .map_err(|e| McpError::internal_error(format!("Status serialization failed: {}", e), None))?;
+        let content = Content::json(status).map_err(|e| {
+            McpError::internal_error(format!("Status serialization failed: {}", e), None)
+        })?;
         Ok(CallToolResult::success(vec![content]))
     }
 }
@@ -120,7 +132,7 @@ impl RbdcDatabaseHandler {
 impl ServerHandler for RbdcDatabaseHandler {
     fn get_info(&self) -> ServerInfo {
         ServerInfo {
-            protocol_version: ProtocolVersion::V_2024_11_05,
+            protocol_version: ProtocolVersion::LATEST,
             capabilities: ServerCapabilities::builder()
                 .enable_tools()
                 .build(),
@@ -132,7 +144,7 @@ impl ServerHandler for RbdcDatabaseHandler {
                 title: None,
                 website_url: None,
             },
-            instructions: Some("RBDC database MCP server providing SQL query, execution and status check tools. Supports sql_query (query), sql_exec (modification) and db_status (status check) tools.".to_string()),
+            instructions: Some("RBDC database MCP server providing SQL query, execution and status check tools. sql_query accepts only single read-only SQL statements. When the server starts with --read-only, the database connection itself should also be configured for read-only access.".to_string()),
         }
     }
 
