@@ -21,10 +21,6 @@ fn main() {
                 // GNU/LLD linker
                 println!("cargo:rustc-link-arg=-Wl,--allow-multiple-definition");
             }
-            "macos" => {
-                // macOS Xcode linker also supports -allow_multiple_definitions
-                println!("cargo:rustc-link-arg=-Wl,-allow_multiple_definitions");
-            }
             _ => {}
         }
     }
