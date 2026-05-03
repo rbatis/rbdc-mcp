@@ -3,7 +3,7 @@ use crate::read_only::is_read_only_sql;
 use std::sync::Arc;
 
 use rmcp::{
-    handler::server::{router::tool::ToolRouter, wrapper::Parameters},
+    handler::server::wrapper::Parameters,
     model::*,
     schemars,
     service::{RequestContext, RoleServer},
@@ -13,7 +13,6 @@ use rmcp::{
 #[derive(Clone)]
 pub struct RbdcDatabaseHandler {
     db_manager: Arc<DatabaseManager>,
-    tool_router: ToolRouter<RbdcDatabaseHandler>,
 }
 
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
@@ -40,7 +39,6 @@ impl RbdcDatabaseHandler {
     pub fn new(db_manager: Arc<DatabaseManager>) -> Self {
         Self {
             db_manager,
-            tool_router: Self::tool_router(),
         }
     }
 
@@ -131,21 +129,18 @@ impl RbdcDatabaseHandler {
 #[tool_handler]
 impl ServerHandler for RbdcDatabaseHandler {
     fn get_info(&self) -> ServerInfo {
-        ServerInfo {
-            protocol_version: ProtocolVersion::LATEST,
-            capabilities: ServerCapabilities::builder()
+        ServerInfo::new(
+            ServerCapabilities::builder()
                 .enable_tools()
                 .build(),
-            server_info: Implementation {
-                name: "RBDC MCP Server".to_string(),
-                version: env!("CARGO_PKG_VERSION").to_string(),
-                description: None,
-                icons: None,
-                title: None,
-                website_url: None,
-            },
-            instructions: Some("RBDC database MCP server providing SQL query, execution and status check tools. sql_query accepts only single read-only SQL statements.".to_string()),
-        }
+        )
+        .with_server_info(Implementation::new(
+            "RBDC MCP Server",
+            env!("CARGO_PKG_VERSION"),
+        ))
+        .with_instructions(
+            "RBDC database MCP server providing SQL query, execution and status check tools. sql_query accepts only single read-only SQL statements.",
+        )
     }
 
     async fn initialize(
