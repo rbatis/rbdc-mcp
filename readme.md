@@ -1,12 +1,12 @@
 # RBDC MCP Server
 
-A database server based on [Model Context Protocol (MCP)](https://modelcontextprotocol.io), supporting SQLite, MySQL, PostgreSQL, and MSSQL databases.
+A database server based on [Model Context Protocol (MCP)](https://modelcontextprotocol.io), supporting SQLite, MySQL, PostgreSQL, MSSQL, DuckDB, and Turso databases.
 
-**🇨🇳 中文文档 / Chinese Documentation**: [README_cn.md](./README_cn.md)
+**🇨🇳 中文文档 / Chinese Documentation**: [readme_cn.md](./readme_cn.md)
 
 ## Advantages
 
-- **Multiple Database Support**: Seamlessly work with SQLite, MySQL, PostgreSQL, and MSSQL using a unified interface
+- **Multiple Database Support**: Seamlessly work with SQLite, MySQL, PostgreSQL, MSSQL, DuckDB, and Turso using a unified interface
 - **AI Integration**: Native integration with Claude AI through the Model Context Protocol
 - **Zero Configuration**: Automatic management of database connections and resources
 - **Security**: Controlled access to your database through AI-driven natural language queries
@@ -75,6 +75,14 @@ After downloading, rename the file to `rbdc-mcp` (or `rbdc-mcp.exe` on Windows) 
     "rbdc-mcp-postgres": {
       "command": "rbdc-mcp",
       "args": ["--database-url", "postgres://user:password@localhost:5432/database"]
+    },
+    "rbdc-mcp-duckdb": {
+      "command": "rbdc-mcp",
+      "args": ["--database-url", "duckdb://path/to/database.duckdb"]
+    },
+    "rbdc-mcp-turso": {
+      "command": "rbdc-mcp",
+      "args": ["--database-url", "turso://database-url?token=your-token"]
     }
   }
 }
@@ -123,6 +131,8 @@ In Claude Desktop, try asking:
 | **MySQL** | `mysql://user:password@host:port/database` |
 | **PostgreSQL** | `postgres://user:password@host:port/database` |
 | **MSSQL** | `mssql://user:password@host:port/database` |
+| **DuckDB** | `duckdb://path/to/database.duckdb` |
+| **Turso** | `turso://database-url?token=your-token` |
 
 ## ⚙️ Configuration Options
 
@@ -132,7 +142,7 @@ In Claude Desktop, try asking:
 | `--max-connections` | Maximum connection pool size | `1` |
 | `--timeout` | Connection timeout (seconds) | `30` |
 | `--log-level` | Log level (error/warn/info/debug) | `info` |
-| `--read-only` | Enforce read-only mode and abort startup unless the current session can be validated as read-only. | `false` |
+| `--read-only` | Disable sql_exec and enforce read-only SQL validation | `false` |
 
 ## 🛠️ Available Tools
 
@@ -142,13 +152,7 @@ In Claude Desktop, try asking:
 
 ## Read-Only Mode
 
-`--read-only` is intended to make the database connection itself read-only, not just hide one tool. Startup now fails if the server cannot validate the current session as read-only for the selected engine.
-
-- **SQLite**: use a URI such as `sqlite://./database.db?mode=ro`. The server rejects `--read-only` if the SQLite URL is not explicitly read-only.
-- **PostgreSQL**: the server validates `SHOW transaction_read_only` and aborts startup unless it is `on`.
-- **MySQL**: the server validates `@@session.transaction_read_only` (or `@@session.tx_read_only` on older servers) and aborts startup unless it is enabled.
-- **MSSQL**: the server validates `DATABASEPROPERTYEX(DB_NAME(), 'Updateability')` and aborts startup unless the current database reports `READ_ONLY`.
-- **`sql_query`** always accepts only a single read-only SQL statement and rejects multi-statement or mutating input.
+`--read-only` disables the `sql_exec` tool, preventing any data modifications. Additionally, `sql_query` validates submitted SQL and rejects statements containing write keywords (INSERT, UPDATE, DELETE, etc.) or multi-statement input.
 
 ## 📸 Screenshots
 

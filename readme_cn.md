@@ -1,14 +1,14 @@
 # RBDC MCP Server
 
-基于 [Model Context Protocol (MCP)](https://modelcontextprotocol.io) 的数据库服务器，支持 SQLite、MySQL、PostgreSQL、MSSQL 四种数据库。
+基于 [Model Context Protocol (MCP)](https://modelcontextprotocol.io) 的数据库服务器，支持 SQLite、MySQL、PostgreSQL、MSSQL、DuckDB、Turso 六种数据库。
 
-**🇺🇸 English Documentation**: [README.md](./README.md)
+**🇺🇸 English Documentation**: [readme.md](./readme.md)
 
-**🇨🇳 中文文档 / Chinese Documentation**: [README_cn.md](./README_cn.md)
+**🇨🇳 中文文档 / Chinese Documentation**: [readme_cn.md](./readme_cn.md)
 
 ## 优势
 
-- **多数据库支持**: 通过统一接口无缝使用 SQLite、MySQL、PostgreSQL 和 MSSQL
+- **多数据库支持**: 通过统一接口无缝使用 SQLite、MySQL、PostgreSQL、MSSQL、DuckDB、Turso
 - **AI 集成**: 通过模型上下文协议 (MCP) 与 Claude AI 原生集成
 - **零配置**: 自动管理数据库连接和资源
 - **安全性**: 通过 AI 驱动的自然语言查询控制对数据库的访问
@@ -77,6 +77,14 @@ cargo install --git https://github.com/rbatis/rbdc-mcp.git
     "rbdc-mcp-postgres": {
       "command": "rbdc-mcp",
       "args": ["--database-url", "postgres://user:password@localhost:5432/database"]
+    },
+    "rbdc-mcp-duckdb": {
+      "command": "rbdc-mcp",
+      "args": ["--database-url", "duckdb://path/to/database.duckdb"]
+    },
+    "rbdc-mcp-turso": {
+      "command": "rbdc-mcp",
+      "args": ["--database-url", "turso://database-url?token=your-token"]
     }
   }
 }
@@ -96,7 +104,7 @@ cargo install --git https://github.com/rbatis/rbdc-mcp.git
   }
 }
 ```
-</details></details>
+</details>
 
 <parameter name="old_str_start_line_number">111
 
@@ -127,6 +135,8 @@ cargo install --git https://github.com/rbatis/rbdc-mcp.git
 | **MySQL** | `mysql://user:password@host:port/database` |
 | **PostgreSQL** | `postgres://user:password@host:port/database` |
 | **MSSQL** | `mssql://user:password@host:port/database` |
+| **DuckDB** | `duckdb://path/to/database.duckdb` |
+| **Turso** | `turso://database-url?token=your-token` |
 
 ## ⚙️ 配置选项
 
@@ -136,7 +146,7 @@ cargo install --git https://github.com/rbatis/rbdc-mcp.git
 | `--max-connections` | 最大连接池大小 | `1` |
 | `--timeout` | 连接超时时间（秒） | `30` |
 | `--log-level` | 日志级别（error/warn/info/debug） | `info` |
-| `--read-only` | 强制只读模式；如果当前数据库会话无法验证为只读，启动会直接失败。 | `false` |
+| `--read-only` | 禁用 sql_exec 并启用 SQL 只读校验 | `false` |
 
 ## 🛠️ 可用工具
 
@@ -146,13 +156,7 @@ cargo install --git https://github.com/rbatis/rbdc-mcp.git
 
 ## 只读模式
 
-`--read-only` 的目标是让数据库连接本身具备只读约束，而不仅仅是隐藏某个工具。现在如果服务器无法验证当前会话确实是只读，会在启动阶段直接失败。
-
-- **SQLite**: 使用类似 `sqlite://./database.db?mode=ro` 的 URI。如果 SQLite URL 没有显式只读参数，服务器会拒绝在 `--read-only` 模式下启动。
-- **PostgreSQL**: 服务器会检查 `SHOW transaction_read_only`，只有结果为 `on` 才允许启动。
-- **MySQL**: 服务器会检查 `@@session.transaction_read_only`（旧版本则回退到 `@@session.tx_read_only`），只有启用后才允许启动。
-- **MSSQL**: 服务器会检查 `DATABASEPROPERTYEX(DB_NAME(), 'Updateability')`，只有当前数据库返回 `READ_ONLY` 才允许启动。
-- **`sql_query`** 始终只接受单条只读 SQL 语句，并拒绝多语句或带写操作的输入。
+`--read-only` 会禁用 `sql_exec` 工具，阻止任何数据修改操作。同时 `sql_query` 会校验提交的 SQL，拒绝包含写关键字（INSERT、UPDATE、DELETE 等）或多条语句的输入。
 
 ## 📸 截图
 
