@@ -6,6 +6,7 @@ use tracing_subscriber::{EnvFilter};
 
 mod db_manager;
 mod handler;
+mod sql_guard;
 
 use crate::db_manager::DatabaseManager;
 use crate::handler::RbdcDatabaseHandler;
@@ -31,6 +32,10 @@ struct Args {
     /// Log level
     #[arg(long, default_value = "info")]
     log_level: String,
+
+    /// Enforce read-only server mode (blocks sql_exec)
+    #[arg(long, default_value_t = false)]
+    read_only: bool,
 }
 
 #[tokio::main]
@@ -50,6 +55,7 @@ async fn main() -> Result<(), anyhow::Error> {
 
     info!("Starting RBDC MCP Server");
     info!("Database URL: {}", args.database_url);
+    info!("Read-only mode: {}", args.read_only);
 
     // Create database manager
     let db_manager = DatabaseManager::new(&args.database_url)
@@ -68,7 +74,7 @@ async fn main() -> Result<(), anyhow::Error> {
     info!("Database connection test successful");
 
     // Create RBDC database handler
-    let handler = RbdcDatabaseHandler::new(Arc::new(db_manager));
+    let handler = RbdcDatabaseHandler::new(Arc::new(db_manager), args.read_only);
 
     info!("Starting RBDC MCP Server...");
     
