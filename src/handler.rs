@@ -1,5 +1,5 @@
 use crate::db_manager::DatabaseManager;
-use crate::sql_guard::is_read_only_sql;
+use crate::read_only::is_read_only_sql;
 use std::sync::Arc;
 
 use rmcp::{
@@ -144,7 +144,7 @@ impl ServerHandler for RbdcDatabaseHandler {
                 title: None,
                 website_url: None,
             },
-            instructions: Some("RBDC database MCP server providing SQL query, execution and status check tools. sql_query accepts only single read-only SQL statements. When the server starts with --read-only, the database connection itself should also be configured for read-only access.".to_string()),
+            instructions: Some("RBDC database MCP server providing SQL query, execution and status check tools. sql_query accepts only single read-only SQL statements.".to_string()),
         }
     }
 

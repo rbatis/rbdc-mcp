@@ -6,7 +6,7 @@ use tracing_subscriber::EnvFilter;
 
 mod db_manager;
 mod handler;
-mod sql_guard;
+mod read_only;
 
 use crate::db_manager::DatabaseManager;
 use crate::handler::RbdcDatabaseHandler;
@@ -33,7 +33,7 @@ struct Args {
     #[arg(long, default_value = "info")]
     log_level: String,
 
-    /// Enforce read-only server mode and abort startup if the current database session cannot be validated as read-only.
+    /// Enforce read-only server mode (blocks sql_exec)
     #[arg(long, default_value_t = false)]
     read_only: bool,
 }
@@ -78,17 +78,7 @@ async fn main() -> Result<(), anyhow::Error> {
         let db = Arc::clone(&db_manager);
         tokio::spawn(async move {
             match db.test_connection().await {
-                Ok(()) => {
-                    info!("Database connection test successful");
-                    match db.validate_read_only_session().await {
-                        Ok(()) => {
-                            if let Some(notice) = db.read_only_startup_notice() {
-                                tracing::warn!("{}", notice);
-                            }
-                        }
-                        Err(e) => error!("Read-only session validation failed: {}", e),
-                    }
-                }
+                Ok(()) => info!("Database connection test successful"),
                 Err(e) => error!("Database connection test failed: {}", e),
             }
         });

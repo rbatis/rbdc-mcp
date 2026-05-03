@@ -1,6 +1,6 @@
 [package]
 name = "rbdc-mcp"
-version = "0.1.9"
+version = "0.1.10"
 edition = "2021"
 description = "MCP (Model Context Protocol) Server for RBDC - Execute SQL queries and modifications"
 authors = ["rbdc team"]
@@ -31,13 +31,14 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "std", "fmt"] }
 
 # RBDC dependencies
+rbdc-pool-fast = { version = "4.9.0" }
 rbdc = { version = "4.9.0" }
 rbdc-sqlite = { version = "4.9.0" }
 rbdc-mysql = { version = "4.9.0" }
 rbdc-pg = { version = "4.9.0" }
 rbdc-mssql = { version = "4.9.0" }
-rbdc-pool-fast = { version = "4.9.0" }
-
+rbdc-duckdb = { version = "4.9.0" }
+rbdc-turso = { version = "4.9.0" }
 
 
 
