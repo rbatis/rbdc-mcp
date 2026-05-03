@@ -76,6 +76,10 @@ After downloading, rename the file to `rbdc-mcp` (or `rbdc-mcp.exe` on Windows) 
       "command": "rbdc-mcp",
       "args": ["--database-url", "postgres://user:password@localhost:5432/database"]
     },
+    "rbdc-mcp-mssql": {
+      "command": "rbdc-mcp",
+      "args": ["--database-url", "mssql://user:password@localhost:1433/database"]
+    },
     "rbdc-mcp-duckdb": {
       "command": "rbdc-mcp",
       "args": ["--database-url", "duckdb://path/to/database.duckdb"]
