@@ -63,12 +63,78 @@ impl DatabaseManager {
         log::debug!("Detected database type: {:?}", db_type);
 
         let driver: Box<dyn Driver> = match db_type {
-            DatabaseType::SQLite => Box::new(rbdc_sqlite::SqliteDriver {}),
-            DatabaseType::MySQL => Box::new(rbdc_mysql::MysqlDriver {}),
-            DatabaseType::PostgreSQL => Box::new(rbdc_pg::PgDriver {}),
-            DatabaseType::Mssql => Box::new(rbdc_mssql::MssqlDriver {}),
-            DatabaseType::DuckDB => Box::new(rbdc_duckdb::DuckDbDriver {}),
-            DatabaseType::Turso => Box::new(rbdc_turso::TursoDriver {}),
+            DatabaseType::SQLite => {
+                #[cfg(feature = "sqlite")]
+                {
+                    Box::new(rbdc_sqlite::SqliteDriver {})
+                }
+                #[cfg(not(feature = "sqlite"))]
+                {
+                    return Err(anyhow!(
+                        "SQLite driver not included. Rebuild with: cargo install --features sqlite"
+                    ));
+                }
+            }
+            DatabaseType::MySQL => {
+                #[cfg(feature = "mysql")]
+                {
+                    Box::new(rbdc_mysql::MysqlDriver {})
+                }
+                #[cfg(not(feature = "mysql"))]
+                {
+                    return Err(anyhow!(
+                        "MySQL driver not included. Rebuild with: cargo install --features mysql"
+                    ));
+                }
+            }
+            DatabaseType::PostgreSQL => {
+                #[cfg(feature = "postgres")]
+                {
+                    Box::new(rbdc_pg::PgDriver {})
+                }
+                #[cfg(not(feature = "postgres"))]
+                {
+                    return Err(anyhow!(
+                        "PostgreSQL driver not included. Rebuild with: cargo install --features postgres"
+                    ));
+                }
+            }
+            DatabaseType::Mssql => {
+                #[cfg(feature = "mssql")]
+                {
+                    Box::new(rbdc_mssql::MssqlDriver {})
+                }
+                #[cfg(not(feature = "mssql"))]
+                {
+                    return Err(anyhow!(
+                        "MSSQL driver not included. Rebuild with: cargo install --features mssql"
+                    ));
+                }
+            }
+            DatabaseType::DuckDB => {
+                #[cfg(feature = "duckdb")]
+                {
+                    Box::new(rbdc_duckdb::DuckDbDriver {})
+                }
+                #[cfg(not(feature = "duckdb"))]
+                {
+                    return Err(anyhow!(
+                        "DuckDB driver not included. Rebuild with: cargo install --features duckdb"
+                    ));
+                }
+            }
+            DatabaseType::Turso => {
+                #[cfg(feature = "turso")]
+                {
+                    Box::new(rbdc_turso::TursoDriver {})
+                }
+                #[cfg(not(feature = "turso"))]
+                {
+                    return Err(anyhow!(
+                        "Turso driver not included. Rebuild with: cargo install --features turso"
+                    ));
+                }
+            }
         };
 
         let manager = ConnectionManager::new(driver, url)?;

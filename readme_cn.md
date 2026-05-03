@@ -20,9 +20,35 @@
 
 **前置要求：** 先安装 [Rust](https://rustup.rs/)。
 
+根据你的需求选择安装命令：
+
 ```bash
+# 全部驱动（默认，构建约 10-15 分钟）
 cargo install --git https://github.com/rbatis/rbdc-mcp.git
+
+# 最小安装：仅 SQLite（构建最快，约 2-3 分钟）
+cargo install --git https://github.com/rbatis/rbdc-mcp.git --no-default-features --features sqlite
+
+# 仅 MySQL：
+cargo install --git https://github.com/rbatis/rbdc-mcp.git --no-default-features --features mysql
+
+# 多个驱动：
+cargo install --git https://github.com/rbatis/rbdc-mcp.git --no-default-features --features "mysql postgres"
 ```
+
+**💡 构建加速：** 如果你只用一种数据库（如 SQLite），加上 `--no-default-features --features sqlite` 可跳过无关驱动的编译，从 ~15 分钟降至 ~2 分钟。
+
+#### 可用 Features
+
+| Feature | 驱动 | 说明 |
+|---------|------|------|
+| `sqlite` | `rbdc-sqlite` | SQLite 支持 |
+| `mysql` | `rbdc-mysql` | MySQL 支持 |
+| `postgres` | `rbdc-pg` | PostgreSQL 支持 |
+| `mssql` | `rbdc-mssql` | MSSQL/SQL Server 支持 |
+| `duckdb` | `rbdc-duckdb` | DuckDB 支持 |
+| `turso` | `rbdc-turso` | Turso/libsql 支持 |
+| `full` | *(以上全部)* | 启用所有数据库驱动 |
 
 ### 📦 方式二：下载预编译二进制文件
 

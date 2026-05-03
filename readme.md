@@ -18,9 +18,35 @@ A database server based on [Model Context Protocol (MCP)](https://modelcontextpr
 
 **Prerequisites:** Install [Rust](https://rustup.rs/) first.
 
+Choose the install command based on your needs:
+
 ```bash
+# All drivers (default, ~10-15 minutes build)
 cargo install --git https://github.com/rbatis/rbdc-mcp.git
+
+# Minimal: SQLite only (fastest build, ~2-3 minutes)
+cargo install --git https://github.com/rbatis/rbdc-mcp.git --no-default-features --features sqlite
+
+# Single driver (e.g., MySQL):
+cargo install --git https://github.com/rbatis/rbdc-mcp.git --no-default-features --features mysql
+
+# Multiple drivers:
+cargo install --git https://github.com/rbatis/rbdc-mcp.git --no-default-features --features "mysql postgres"
 ```
+
+**💡 Build speed tip:** If you only need one database (e.g., SQLite), add `--no-default-features --features sqlite` to skip compiling unused drivers, cutting build time from ~15 minutes to ~2 minutes.
+
+#### Available Features
+
+| Feature | Driver | Description |
+|---------|--------|-------------|
+| `sqlite` | `rbdc-sqlite` | SQLite support |
+| `mysql` | `rbdc-mysql` | MySQL support |
+| `postgres` | `rbdc-pg` | PostgreSQL support |
+| `mssql` | `rbdc-mssql` | MSSQL/SQL Server support |
+| `duckdb` | `rbdc-duckdb` | DuckDB support |
+| `turso` | `rbdc-turso` | Turso/libsql support |
+| `full` | *(all above)* | Enable all database drivers |
 
 ### 📦 Method 2: Download Pre-built Binaries
 
