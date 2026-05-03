@@ -4,9 +4,9 @@ use std::sync::Arc;
 use tracing::{error, info};
 use tracing_subscriber::EnvFilter;
 
-mod db_manager;
-mod handler;
-mod read_only;
+pub mod db_manager;
+pub mod handler;
+pub mod read_only;
 
 use crate::db_manager::DatabaseManager;
 use crate::handler::RbdcDatabaseHandler;
