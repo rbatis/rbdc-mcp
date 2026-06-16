@@ -63,9 +63,11 @@ cargo install --git https://github.com/rbatis/rbdc-mcp.git --no-default-features
 
 下载后，将文件重命名为 `rbdc-mcp`（Windows 下为 `rbdc-mcp.exe`），并添加到系统 PATH 环境变量中即可。
 
-## 🔧 快速设置
+## 🔧 Agent Client 配置
 
-### 步骤 1：配置 Claude Desktop
+将 rbdc-mcp 添加到你的 MCP 兼容客户端中即可使用。
+
+### Claude Desktop
 
 **配置文件位置：**
 - **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
@@ -84,7 +86,7 @@ cargo install --git https://github.com/rbatis/rbdc-mcp.git --no-default-features
 }
 ```
 
-**不同平台配置示例：**
+**数据库示例：**
 
 <details>
 <summary><strong>不同数据库示例</strong></summary>
@@ -136,15 +138,46 @@ cargo install --git https://github.com/rbatis/rbdc-mcp.git --no-default-features
 ```
 </details>
 
-<parameter name="old_str_start_line_number">111
+**重启：** 保存配置后，重启 Claude Desktop 以加载 MCP 服务器。
 
-### 步骤 2：重启 Claude Desktop
+**测试：** 在 Claude Desktop 中尝试询问：
+- "显示数据库连接状态"
+- "我的数据库中有哪些表？"
 
-保存配置后，重启 Claude Desktop 以加载 MCP 服务器。
+### Codex
 
-### 步骤 3：测试连接
+**配置文件位置：**
+- **全局配置**: `~/.codex/mcp.toml`
+- **项目级配置**: `.codex/mcp.toml`（放在项目根目录）
 
-在 Claude Desktop 中尝试询问：
+**基础配置（`.codex/mcp.toml` 或 `~/.codex/mcp.toml`）：**
+
+```toml
+[mcp_servers.rbdc-mcp]
+command = "rbdc-mcp"
+args = ["--database-url", "sqlite://./database.db"]
+type = "stdio"
+enabled = true
+```
+
+**数据库示例：**
+
+<details>
+<summary><strong>不同数据库示例</strong></summary>
+
+```toml
+# 只需修改 --database-url 为你的实际数据库连接即可
+[mcp_servers.rbdc-mcp]
+command = "rbdc-mcp"
+args = ["--database-url", "sqlite://./database.db"]
+type = "stdio"
+enabled = true
+```
+</details>
+
+**重启：** 保存配置文件后，重启 Codex 以加载 MCP 服务器。如果 Codex 已在运行，可执行 `codex reconnect` 强制重新加载。
+
+**测试：** 在 Codex 聊天中尝试询问：
 - "显示数据库连接状态"
 - "我的数据库中有哪些表？"
 

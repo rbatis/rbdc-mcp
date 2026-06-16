@@ -61,9 +61,11 @@ Download the latest release for your platform from [GitHub Releases](https://git
 
 After downloading, rename the file to `rbdc-mcp` (or `rbdc-mcp.exe` on Windows) and add it to your system PATH.
 
-## 🔧 Quick Setup
+## 🔧 Agent Client Configuration
 
-### Step 1: Configure Claude Desktop
+Configure rbdc-mcp in your MCP-compatible client by adding it to the MCP server list.
+
+### Claude Desktop
 
 **Configuration File Location:**
 - **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
@@ -82,7 +84,7 @@ After downloading, rename the file to `rbdc-mcp` (or `rbdc-mcp.exe` on Windows) 
 }
 ```
 
-**Platform-Specific Examples:**
+**Database Examples:**
 
 <details>
 <summary><strong>Different Database Examples</strong></summary>
@@ -134,13 +136,46 @@ After downloading, rename the file to `rbdc-mcp` (or `rbdc-mcp.exe` on Windows) 
 ```
 </details>
 
-### Step 2: Restart Claude Desktop
+**Restart:** After saving, restart Claude Desktop to load the MCP server.
 
-After saving the configuration, restart Claude Desktop to load the MCP server.
+**Test:** In Claude Desktop, try asking:
+- "Show me the database connection status"
+- "What tables are in my database?"
 
-### Step 3: Test the Connection
+### Codex
 
-In Claude Desktop, try asking:
+**Configuration File Location:**
+- **Global**: `~/.codex/mcp.toml`
+- **Project-level**: `.codex/mcp.toml` (place in your project root)
+
+**Basic Configuration (`.codex/mcp.toml` or `~/.codex/mcp.toml`):**
+
+```toml
+[mcp_servers.rbdc-mcp]
+command = "rbdc-mcp"
+args = ["--database-url", "sqlite://./database.db"]
+type = "stdio"
+enabled = true
+```
+
+**Database Examples:**
+
+<details>
+<summary><strong>Different Database Examples</strong></summary>
+
+```toml
+# Just change --database-url to your actual database URL
+[mcp_servers.rbdc-mcp]
+command = "rbdc-mcp"
+args = ["--database-url", "sqlite://./database.db"]
+type = "stdio"
+enabled = true
+```
+</details>
+
+**Restart:** After saving the config file, restart Codex to load the MCP server. If Codex is already running, run `codex reconnect` to force a reload.
+
+**Test:** In Codex chat, try asking:
 - "Show me the database connection status"
 - "What tables are in my database?"
 
