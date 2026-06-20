@@ -50,13 +50,13 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "std", "fmt"] 
 # RBDC dependencies (optional — each behind a feature flag)
 rbdc-pool-fast = { version = "4.9.0" }
 rbdc = { version = "4.9.0" }
+dark-std = "0.2.16"
 rbdc-sqlite = { version = "4.9.0", optional = true }
 rbdc-mysql = { version = "4.9.0", optional = true }
 rbdc-pg = { version = "4.9.0", optional = true }
 rbdc-mssql = { version = "4.9.0", optional = true }
 rbdc-duckdb = { version = "4.9.0", optional = true }
 rbdc-turso = { version = "4.9.0", optional = true }
-
 
 
 

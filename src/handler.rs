@@ -17,6 +17,10 @@ pub struct RbdcDatabaseHandler {
 
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
 pub struct SqlQueryParams {
+    /// Optional database alias. Defaults to the CLI-provided "default" alias
+    /// when omitted. Use `list_databases` to see registered aliases.
+    #[serde(default)]
+    alias: Option<String>,
     /// SQL query statement to execute
     sql: String,
     /// SQL parameter array, optional
@@ -26,11 +30,48 @@ pub struct SqlQueryParams {
 
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
 pub struct SqlExecParams {
+    /// Optional database alias. Defaults to the CLI-provided "default" alias
+    /// when omitted. Use `list_databases` to see registered aliases.
+    #[serde(default)]
+    alias: Option<String>,
     /// SQL modification statement to execute
     sql: String,
     /// SQL parameter array, optional
     #[serde(default)]
     params: Vec<serde_json::Value>,
+}
+
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+pub struct DbStatusParams {
+    /// Optional database alias. Defaults to the CLI-provided "default" alias
+    /// when omitted.
+    #[serde(default)]
+    alias: Option<String>,
+}
+
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+pub struct TestConnectionParams {
+    /// Optional database alias. Defaults to the CLI-provided "default" alias
+    /// when omitted.
+    #[serde(default)]
+    alias: Option<String>,
+}
+
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+pub struct AddDatabaseParams {
+    /// Unique alias used to refer to this database from `sql_query` /
+    /// `sql_exec`. The reserved alias "default" cannot be reused.
+    alias: String,
+    /// Database connection URL (sqlite://, mysql://, pg://, mssql://,
+    /// duckdb://, turso://, libsql://).
+    url: String,
+}
+
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+pub struct RemoveDatabaseParams {
+    /// Alias of the database to unregister. The "default" alias is reserved
+    /// and cannot be removed.
+    alias: String,
 }
 
 // Use tool_router macro to generate the tool router
@@ -72,7 +113,11 @@ impl RbdcDatabaseHandler {
         // Convert parameter types from serde_json::Value to rbs::Value
         let rbs_params = self.convert_params(&params.params)?;
 
-        match self.db_manager.execute_query(&params.sql, rbs_params).await {
+        match self
+            .db_manager
+            .execute_query(params.alias.as_deref(), &params.sql, rbs_params)
+            .await
+        {
             Ok(results) => {
                 let content = Content::json(results).map_err(|e| {
                     McpError::internal_error(format!("Result serialization failed: {}", e), None)
@@ -104,7 +149,7 @@ impl RbdcDatabaseHandler {
 
         match self
             .db_manager
-            .execute_modification(&params.sql, rbs_params)
+            .execute_modification(params.alias.as_deref(), &params.sql, rbs_params)
             .await
         {
             Ok(result) => {
@@ -124,10 +169,123 @@ impl RbdcDatabaseHandler {
     async fn db_status(
         &self,
         _context: RequestContext<RoleServer>,
+        Parameters(params): Parameters<DbStatusParams>,
     ) -> Result<CallToolResult, McpError> {
-        let status = self.db_manager.get_pool_state().await;
+        let status = self
+            .db_manager
+            .get_pool_state(params.alias.as_deref())
+            .await;
+        let status = status.map_err(|e| {
+            McpError::internal_error(format!("Status retrieval failed: {}", e), None)
+        })?;
         let content = Content::json(status).map_err(|e| {
             McpError::internal_error(format!("Status serialization failed: {}", e), None)
+        })?;
+        Ok(CallToolResult::success(vec![content]))
+    }
+
+    #[tool(description = "Test connectivity for a registered database. Pass `alias` to target a specific database; omit it to test the 'default' database.")]
+    async fn test_connection(
+        &self,
+        _context: RequestContext<RoleServer>,
+        Parameters(params): Parameters<TestConnectionParams>,
+    ) -> Result<CallToolResult, McpError> {
+        let alias = params.alias.clone();
+        match self
+            .db_manager
+            .test_connection(params.alias.as_deref())
+            .await
+        {
+            Ok(()) => {
+                let content = Content::json(serde_json::json!({
+                    "alias": alias.unwrap_or_else(|| "default".to_string()),
+                    "status": "ok"
+                }))
+                .map_err(|e| {
+                    McpError::internal_error(
+                        format!("Status serialization failed: {}", e),
+                        None,
+                    )
+                })?;
+                Ok(CallToolResult::success(vec![content]))
+            }
+            Err(e) => Err(McpError::internal_error(
+                format!("Connection test failed: {}", e),
+                None,
+            )),
+        }
+    }
+
+    #[tool(description = "Register a new database connection under `alias` and start a pool. Use `list_databases` to inspect currently registered databases.")]
+    async fn add_database(
+        &self,
+        _context: RequestContext<RoleServer>,
+        Parameters(params): Parameters<AddDatabaseParams>,
+    ) -> Result<CallToolResult, McpError> {
+        match self
+            .db_manager
+            .add_database(&params.alias, &params.url)
+            .await
+        {
+            Ok(()) => {
+                let content = Content::json(serde_json::json!({
+                    "alias": params.alias,
+                    "url": params.url,
+                    "status": "registered"
+                }))
+                .map_err(|e| {
+                    McpError::internal_error(
+                        format!("Status serialization failed: {}", e),
+                        None,
+                    )
+                })?;
+                Ok(CallToolResult::success(vec![content]))
+            }
+            Err(e) => Err(McpError::invalid_params(
+                format!("Failed to register database: {}", e),
+                None,
+            )),
+        }
+    }
+
+    #[tool(description = "Unregister a previously-added database alias. The reserved 'default' alias cannot be removed.")]
+    async fn remove_database(
+        &self,
+        _context: RequestContext<RoleServer>,
+        Parameters(params): Parameters<RemoveDatabaseParams>,
+    ) -> Result<CallToolResult, McpError> {
+        match self.db_manager.remove_database(&params.alias) {
+            Ok(()) => {
+                let content = Content::json(serde_json::json!({
+                    "alias": params.alias,
+                    "status": "removed"
+                }))
+                .map_err(|e| {
+                    McpError::internal_error(
+                        format!("Status serialization failed: {}", e),
+                        None,
+                    )
+                })?;
+                Ok(CallToolResult::success(vec![content]))
+            }
+            Err(e) => Err(McpError::invalid_params(
+                format!("Failed to remove database: {}", e),
+                None,
+            )),
+        }
+    }
+
+    #[tool(description = "List all registered database aliases along with their URL and detected type.")]
+    async fn list_databases(
+        &self,
+        _context: RequestContext<RoleServer>,
+    ) -> Result<CallToolResult, McpError> {
+        let list = self.db_manager.list_databases();
+        let content = Content::json(list).map_err(|e| {
+            McpError::internal_error(
+                format!("Status serialization failed: {}", e),
+                None,
+            )
         })?;
         Ok(CallToolResult::success(vec![content]))
     }

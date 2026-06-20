@@ -1,15 +1,21 @@
 //! Database connection manager
 //!
-//! Responsible for managing different types of database connections
+//! Holds a thread-safe `SyncHashMap<String, FastPool>` so the AI client can
+//! register additional database URLs at runtime. The CLI-provided URL is
+//! registered under the [`DEFAULT_DB_ALIAS`] alias.
 
 use crate::read_only::is_read_only_sql;
 use anyhow::{anyhow, Result};
+use dark_std::sync::SyncHashMap;
 use rbdc::db::{Connection, Driver};
 use rbdc::pool::{ConnectionManager, Pool};
 use rbdc_pool_fast::FastPool;
 use rbs::Value;
 use std::sync::Arc;
 use std::time::Duration;
+
+/// Default alias used for the database URL provided via the CLI.
+pub const DEFAULT_DB_ALIAS: &str = "default";
 
 /// Supported database types
 #[derive(Debug, Clone)]
@@ -48,20 +54,30 @@ impl DatabaseType {
     }
 }
 
-/// Database connection manager
-pub struct DatabaseManager {
+/// Per-alias pool bookkeeping stored in the multi-database registry.
+struct PoolEntry {
     pool: Arc<FastPool>,
     db_type: DatabaseType,
+    url: String,
+}
+
+/// Database connection manager.
+///
+/// Stores a [`SyncHashMap`] of `alias -> FastPool` so the AI client can
+/// dynamically add and remove database connections through MCP tools. The
+/// alias provided via the CLI is registered under [`DEFAULT_DB_ALIAS`].
+pub struct DatabaseManager {
+    pools: Arc<SyncHashMap<String, PoolEntry>>,
+    /// Pool sizing applied to pools registered after construction.
+    max_connections: u64,
+    timeout_seconds: u64,
     read_only: bool,
 }
 
 impl DatabaseManager {
-    /// Create a new database manager
-    pub fn new(url: &str, read_only: bool) -> Result<Self> {
-        log::debug!("Creating DatabaseManager with URL: {}", url);
-        let db_type = DatabaseType::from_url(url)?;
-        log::debug!("Detected database type: {:?}", db_type);
-
+    /// Build the driver for a database type, returning a clear error if the
+    /// matching cargo feature is not enabled.
+    fn build_driver(db_type: &DatabaseType) -> Result<Box<dyn Driver>> {
         let driver: Box<dyn Driver> = match db_type {
             DatabaseType::SQLite => {
                 #[cfg(feature = "sqlite")]
@@ -136,32 +152,140 @@ impl DatabaseManager {
                 }
             }
         };
+        Ok(driver)
+    }
 
+    /// Create a pool for `url` using the manager's current pool sizing.
+    async fn build_pool(&self, url: &str) -> Result<PoolEntry> {
+        let db_type = DatabaseType::from_url(url)?;
+        let driver = Self::build_driver(&db_type)?;
         let manager = ConnectionManager::new(driver, url)?;
         let pool = FastPool::new(manager)?;
-
-        Ok(Self {
+        pool.set_max_open_conns(self.max_connections).await;
+        pool.set_timeout(Some(Duration::from_secs(self.timeout_seconds)))
+            .await;
+        Ok(PoolEntry {
             pool: Arc::new(pool),
             db_type,
+            url: url.to_string(),
+        })
+    }
+
+    /// Create a new database manager. The CLI URL is validated eagerly so
+    /// the process fails fast on a bad URL; the actual pool is created in
+    /// [`DatabaseManager::configure_pool`] so pool sizing is known up front
+    /// and runtime registration reuses the same code path.
+    pub fn new(url: &str, read_only: bool) -> Result<Self> {
+        log::debug!("Creating DatabaseManager with URL: {}", url);
+        let db_type = DatabaseType::from_url(url)?;
+        log::debug!("Detected database type: {:?}", db_type);
+        let _ = db_type;
+        Ok(Self {
+            pools: Arc::new(SyncHashMap::new()),
+            max_connections: 1,
+            timeout_seconds: 30,
             read_only,
         })
     }
 
-    /// Configure connection pool parameters
-    pub async fn configure_pool(&self, max_connections: u64, timeout_seconds: u64) {
-        self.pool.set_max_open_conns(max_connections).await;
-        self.pool
-            .set_timeout(Some(Duration::from_secs(timeout_seconds)))
-            .await;
+    /// Configure pool sizing and create the default pool for `url` under
+    /// the [`DEFAULT_DB_ALIAS`] alias. Subsequent calls to
+    /// [`DatabaseManager::add_database`] use the same sizing.
+    pub async fn configure_pool(
+        &mut self,
+        url: &str,
+        max_connections: u64,
+        timeout_seconds: u64,
+    ) -> Result<()> {
+        self.max_connections = max_connections;
+        self.timeout_seconds = timeout_seconds;
+        if self.pools.contains_key(&DEFAULT_DB_ALIAS.to_string()) {
+            return Ok(());
+        }
+        let entry = self.build_pool(url).await?;
+        self.pools
+            .insert(DEFAULT_DB_ALIAS.to_string(), entry);
+        log::info!("Registered default database alias for {}", url);
+        Ok(())
     }
 
-    /// Execute query and return result set
-    pub async fn execute_query(&self, sql: &str, params: Vec<Value>) -> Result<Value> {
+    /// Register a new database alias. Returns an error if the alias already
+    /// exists or the URL is unsupported.
+    pub async fn add_database(&self, alias: &str, url: &str) -> Result<()> {
+        let alias = alias.trim();
+        if alias.is_empty() {
+            return Err(anyhow!("Database alias must not be empty"));
+        }
+        if self.pools.contains_key(&alias.to_string()) {
+            return Err(anyhow!("Database alias '{}' already exists", alias));
+        }
+        let entry = self.build_pool(url).await?;
+        self.pools.insert(alias.to_string(), entry);
+        log::info!("Registered database alias '{}' for {}", alias, url);
+        Ok(())
+    }
+
+    /// Remove a database alias. The [`DEFAULT_DB_ALIAS`] alias cannot be
+    /// removed so the CLI-provided database always remains reachable.
+    pub fn remove_database(&self, alias: &str) -> Result<()> {
+        let alias = alias.trim();
+        if alias == DEFAULT_DB_ALIAS {
+            return Err(anyhow!(
+                "Cannot remove the '{}' alias",
+                DEFAULT_DB_ALIAS
+            ));
+        }
+        if self.pools.remove(&alias.to_string()).is_none() {
+            return Err(anyhow!("Database alias '{}' does not exist", alias));
+        }
+        log::info!("Removed database alias '{}'", alias);
+        Ok(())
+    }
+
+    /// Resolve an alias to its pool entry. Falls back to [`DEFAULT_DB_ALIAS`].
+    fn resolve(&self, alias: Option<&str>) -> Result<&PoolEntry> {
+        let key = alias.unwrap_or(DEFAULT_DB_ALIAS);
+        self.pools
+            .get(&key.to_string())
+            .ok_or_else(|| anyhow!("Unknown database alias '{}'", key))
+    }
+
+    /// List registered database aliases with their URL and type.
+    pub fn list_databases(&self) -> Vec<serde_json::Value> {
+        let mut out: Vec<serde_json::Value> = Vec::new();
+        for (alias, entry) in self.pools.iter() {
+            out.push(serde_json::json!({
+                "alias": alias,
+                "url": entry.url,
+                "database_type": format!("{:?}", entry.db_type),
+            }));
+        }
+        out.sort_by(|a, b| {
+            let aa = a.get("alias").and_then(|v| v.as_str()).unwrap_or("");
+            let bb = b.get("alias").and_then(|v| v.as_str()).unwrap_or("");
+            if aa == DEFAULT_DB_ALIAS {
+                std::cmp::Ordering::Less
+            } else if bb == DEFAULT_DB_ALIAS {
+                std::cmp::Ordering::Greater
+            } else {
+                aa.cmp(bb)
+            }
+        });
+        out
+    }
+
+    /// Execute a read-only query against the named alias (or `default`).
+    pub async fn execute_query(
+        &self,
+        alias: Option<&str>,
+        sql: &str,
+        params: Vec<Value>,
+    ) -> Result<Value> {
         if !is_read_only_sql(sql) {
             return Err(anyhow!("Read-only query validation failed"));
         }
-
-        let mut conn = self
+        let entry = self.resolve(alias)?;
+        let mut conn = entry
             .pool
             .get()
             .await
@@ -173,71 +297,68 @@ impl DatabaseManager {
         Ok(result)
     }
 
-    /// Execute modification operations (INSERT, UPDATE, DELETE, etc.)
+    /// Execute a write operation (INSERT/UPDATE/DELETE, etc.) against the
+    /// named alias (or `default`).
     pub async fn execute_modification(
         &self,
+        alias: Option<&str>,
         sql: &str,
         params: Vec<Value>,
     ) -> Result<serde_json::Value> {
         if self.read_only {
-            return Err(anyhow!(
-                "Read-only mode blocks SQL modifications."
-            ));
+            return Err(anyhow!("Read-only mode blocks SQL modifications."));
         }
-
-        let mut conn = self
+        let entry = self.resolve(alias)?;
+        let mut conn = entry
             .pool
             .get()
             .await
             .map_err(|e| anyhow!("Failed to get database connection: {}", e))?;
-
         let result = conn
             .exec(sql, params)
             .await
             .map_err(|e| anyhow!("Modification operation failed: {}", e))?;
-
         Ok(serde_json::json!({
             "rows_affected": result.rows_affected,
             "last_insert_id": result.last_insert_id
         }))
     }
 
-    /// Get database type
-    pub fn database_type(&self) -> &DatabaseType {
-        &self.db_type
-    }
-
-    /// Whether server read-only mode is enabled
+    /// Whether server read-only mode is enabled.
     pub fn read_only_enabled(&self) -> bool {
         self.read_only
     }
 
-    /// Get connection pool state
-    pub async fn get_pool_state(&self) -> serde_json::Value {
-        let state = self.pool.state().await;
+    /// Get connection pool state for the named alias (or `default`).
+    pub async fn get_pool_state(&self, alias: Option<&str>) -> Result<serde_json::Value> {
+        let entry = self.resolve(alias)?;
+        let state = entry.pool.state().await;
         let mut result = serde_json::json!(state);
         if let Some(obj) = result.as_object_mut() {
             obj.insert(
                 "database_type".to_string(),
-                serde_json::json!(format!("{:?}", self.database_type())),
+                serde_json::json!(format!("{:?}", entry.db_type)),
             );
             obj.insert("read_only".to_string(), serde_json::json!(self.read_only));
+            obj.insert(
+                "alias".to_string(),
+                serde_json::json!(alias.unwrap_or(DEFAULT_DB_ALIAS)),
+            );
         }
-        result
+        Ok(result)
     }
 
-    /// Test database connection
-    pub async fn test_connection(&self) -> Result<()> {
-        let mut conn = self
+    /// Test the connection for the named alias (or `default`).
+    pub async fn test_connection(&self, alias: Option<&str>) -> Result<()> {
+        let entry = self.resolve(alias)?;
+        let mut conn = entry
             .pool
             .get()
             .await
             .map_err(|e| anyhow!("Failed to get database connection: {}", e))?;
-
         conn.ping()
             .await
             .map_err(|e| anyhow!("Database connection test failed: {}", e))?;
-
         Ok(())
     }
 }

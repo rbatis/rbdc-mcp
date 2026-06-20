@@ -62,15 +62,19 @@ async fn main() -> Result<(), anyhow::Error> {
     info!("Read-only mode: {}", args.read_only);
 
     // Create database manager (no connection yet)
-    let db_manager = DatabaseManager::new(&args.database_url, args.read_only).map_err(|e| {
+    let mut db_manager = DatabaseManager::new(&args.database_url, args.read_only).map_err(|e| {
         error!("Failed to create database manager: {}", e);
         anyhow::Error::msg(e.to_string())
     })?;
 
     // Configure connection pool
-    db_manager
-        .configure_pool(args.max_connections, args.timeout)
-        .await;
+    if let Err(e) = db_manager
+        .configure_pool(&args.database_url, args.max_connections, args.timeout)
+        .await
+    {
+        error!("Failed to configure connection pool: {}", e);
+        return Err(anyhow::Error::msg(e.to_string()));
+    }
 
     let db_manager = Arc::new(db_manager);
 
@@ -79,7 +83,7 @@ async fn main() -> Result<(), anyhow::Error> {
     {
         let db = Arc::clone(&db_manager);
         tokio::spawn(async move {
-            match db.test_connection().await {
+            match db.test_connection(None).await {
                 Ok(()) => info!("Database connection test successful"),
                 Err(e) => error!("Database connection test failed: {}", e),
             }

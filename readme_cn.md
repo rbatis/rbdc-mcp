@@ -189,6 +189,7 @@ enabled = true
 - **修改数据**: "添加一个名为张三、邮箱为zhangsan@example.com的新用户"
 - **获取状态**: "数据库连接状态如何？"
 - **架构信息**: "我的数据库中有哪些表？"
+- **多库协作**: "帮我连上 MySQL 订单库，对比它和本地 SQLite 缓存的记录数"
 
 ## 🗄️ 数据库支持
 
@@ -216,6 +217,37 @@ enabled = true
 - **`sql_query`**: 安全执行单条只读 SQL 查询
 - **`sql_exec`**: 在非只读模式下执行 INSERT/UPDATE/DELETE 操作
 - **`db_status`**: 检查连接池状态
+- **`sql_query`**: 执行单条只读 SQL 查询。可选传入 `alias` 切到非默认库；省略时使用 `default`。
+- **`sql_exec`**: 在非只读模式下执行 INSERT/UPDATE/DELETE 操作。可选传入 `alias` 切到非默认库。
+- **`db_status`**: 查看某库的连接池状态。可选传入 `alias`。
+- **`test_connection`**: 测试某库的连通性。可选传入 `alias`。
+- **`list_databases`**: 列出所有已注册的数据库别名、URL 和识别出的类型。
+- **`add_database`**: 运行时注册一个新的数据库连接（指定 `alias` 与 `url`）并建池。支持：`sqlite://`、`mysql://`、`pg://` / `postgres://`、`mssql://` / `sqlserver://`、`duckdb://`、`turso://` / `libsql://`。
+- **`remove_database`**: 注销一个已通过 `add_database` 注册的别名；`default` 为保留别名，不可删除。
+
+## 🔌 动态多库
+
+`rbdc-mcp` 是**单进程多库**的 MCP 服务器。通过 `--database-url` 传入的数据库在启动时注册为 `default` 别名；AI 可在对话中通过 MCP 工具继续注册更多数据库，并按 `alias` 路由到任意一个。
+
+**AI 的典型调用流程：**
+
+1. `list_databases` — 查看当前已注册的所有别名。
+2. `add_database(alias="orders_mysql", url="mysql://user:pass@host/orders")` — 注册一个新库并建池。
+3. `sql_query({ alias: "orders_mysql", sql: "SELECT COUNT(*) FROM orders" })` — 在该库上执行查询。省略 `alias` 时落到 `default`。
+4. `remove_database(alias="orders_mysql")` — 用完后拆掉该池并注销别名。
+
+**为什么这样设计**
+
+- 一个 MCP 进程承载多个数据库 —— 不再需要为每个库各起一个 `rbdc-mcp-mysql` / `rbdc-mcp-postgres` 进程。
+- 所有别名都可被 `list_databases` 枚举，AI 可在每次调用前动态选目标。
+- `default` 别名对应 CLI 启动时传入的 URL，不可删除，保证启动库始终可达。
+- 每个别名拥有独立连接池，不同别名之间的并发查询互不阻塞。
+
+**可直接对 AI 说的话**
+
+> "帮我连上 MySQL 订单库 `mysql://root:pwd@10.0.0.5/orders`，按月统计营收。"
+
+AI 会自动调用 `add_database(...)` 注册库，再用 `sql_query(...)` 在该别名上查询，全程不需要重启 MCP 服务器。
 
 ## 只读模式
 
@@ -232,3 +264,4 @@ enabled = true
 ## 许可证
 
 Apache-2.0 
+- **单服务多库**: AI 可通过 `add_database` 工具在运行时动态注册更多数据库连接，并按 `alias` 路由到任意已注册的库 —— 无需额外启动 MCP 进程

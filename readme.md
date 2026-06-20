@@ -87,7 +87,46 @@ Configure rbdc-mcp in your MCP-compatible client by adding it to the MCP server 
 **Database Examples:**
 
 <details>
-<summary><strong>Different Database Examples</strong></summary>
+<summary><strong>Single-Server Multi-Database Configuration</strong></summary>
+
+One `rbdc-mcp` process can host many databases. The CLI `--database-url` is registered as the `default` alias; the AI can register additional databases at runtime through MCP tools (see <a href="#-dynamic-multi-database">Dynamic Multi-Database</a>).
+
+The configuration below starts one process with `default` pointing at SQLite; the AI then registers MySQL, Postgres, etc. as needed:
+
+```json
+{
+  "mcpServers": {
+    "rbdc-mcp": {
+      "command": "rbdc-mcp",
+      "args": [
+        "--database-url", "sqlite://./database.db"
+      ]
+    }
+  }
+}
+```
+
+If you prefer a fixed alias set declared up front, repeat `--database-url` (one process is enough — the AI only needs the `alias` to know which pool to hit):
+
+```json
+{
+  "mcpServers": {
+    "rbdc-mcp": {
+      "command": "rbdc-mcp",
+      "args": [
+        "--database-url", "sqlite://./database.db",
+        "--database-url", "mysql://user:password@localhost:3306/orders",
+        "--database-url", "postgres://user:password@localhost:5432/analytics",
+        "--database-url", "mssql://user:password@localhost:1433/reporting",
+        "--database-url", "duckdb://path/to/database.duckdb",
+        "--database-url", "turso://database-url?token=your-token"
+      ]
+    }
+  }
+}
+```
+
+Or, if you really want one process per database (legacy style, less recommended now that multi-database is supported):
 
 ```json
 {
@@ -119,6 +158,8 @@ Configure rbdc-mcp in your MCP-compatible client by adding it to the MCP server 
   }
 }
 ```
+
+**Note:** The `--database-url` repeated form assumes CLI support for multiple `--database-url` flags, which is the planned configuration shape. In the current release, only one URL is accepted on the CLI; use the `add_database` MCP tool to register the rest at runtime.
 </details>
 
 <details>
@@ -187,6 +228,7 @@ enabled = true
 - **Modify Data**: "Add a new user named John with email john@example.com"
 - **Get Status**: "What's the database connection status?"
 - **Schema Info**: "What tables exist in my database?"
+- **Multi-Database**: "Connect to my MySQL orders database and compare its row counts with the local SQLite cache"
 
 ## 🗄️ Database Support
 
@@ -211,9 +253,37 @@ enabled = true
 
 ## 🛠️ Available Tools
 
-- **`sql_query`**: Execute single read-only SQL queries safely
-- **`sql_exec`**: Execute INSERT/UPDATE/DELETE operations when the server is not in read-only mode
-- **`db_status`**: Check connection pool status
+- **`sql_query`**: Execute a single read-only SQL statement. Pass optional `alias` to target a non-default database; defaults to `default`.
+- **`sql_exec`**: Execute INSERT/UPDATE/DELETE operations when the server is not in read-only mode. Pass optional `alias` to target a non-default database.
+- **`db_status`**: Inspect connection pool state for a database. Pass optional `alias`.
+- **`test_connection`**: Ping a registered database. Pass optional `alias`.
+- **`list_databases`**: List all registered database aliases along with their URL and detected type.
+- **`add_database`**: Register a new database connection under an `alias` and start a pool at runtime. Supported URL schemes: `sqlite://`, `mysql://`, `pg://` / `postgres://`, `mssql://` / `sqlserver://`, `duckdb://`, `turso://` / `libsql://`.
+- **`remove_database`**: Unregister a previously-added alias. The reserved `default` alias cannot be removed.
+
+## 🔌 Dynamic Multi-Database
+
+`rbdc-mcp` is a **multi-database server from a single process**. The database URL provided via `--database-url` is registered as the `default` alias at startup; the AI can register additional databases on the fly through MCP tools and route queries to any of them by `alias`.
+
+**Tool flow the AI follows:**
+
+1. `list_databases` — see all currently registered aliases.
+2. `add_database(alias="orders_mysql", url="mysql://user:pass@host/orders")` — register a new database and start a pool for it.
+3. `sql_query({ alias: "orders_mysql", sql: "SELECT COUNT(*) FROM orders" })` — route a query to that database. Omit `alias` to use the `default` one.
+4. `remove_database(alias="orders_mysql")` — tear down the pool and unregister the alias when finished.
+
+**Why this matters**
+
+- One MCP server process, many databases — no need to spawn `rbdc-mcp-mysql`, `rbdc-mcp-postgres`, etc. for each database.
+- All aliases are discoverable via `list_databases`, so the AI can dynamically pick the right target per query.
+- The `default` alias is reserved for the CLI URL and cannot be removed, so the startup database always remains reachable.
+- Each alias has its own independent connection pool — concurrent queries against different aliases do not block each other.
+
+**Example prompt you can give the AI**
+
+> "Connect to my MySQL orders database at `mysql://root:pwd@10.0.0.5/orders` and tell me the total revenue by month."
+
+The AI will call `add_database(...)`, then `sql_query(...)` against that alias without restarting the MCP server.
 
 ## Read-Only Mode
 
@@ -230,3 +300,4 @@ enabled = true
 ## License
 
 Apache-2.0 
+- **Multi-Database in One Server**: The AI can register additional database connections at runtime via the `add_database` tool and route queries to any registered database by its `alias` — no need to spawn extra MCP server processes
