@@ -89,9 +89,9 @@ Configure rbdc-mcp in your MCP-compatible client by adding it to the MCP server 
 <details>
 <summary><strong>Single-Server Multi-Database Configuration</strong></summary>
 
-One `rbdc-mcp` process can host many databases. The CLI `--database-url` is registered as the `default` alias; the AI can register additional databases at runtime through MCP tools (see <a href="#-dynamic-multi-database">Dynamic Multi-Database</a>).
+One `rbdc-mcp` process can host many databases. The first `--database-url` is registered as the `default` alias; pair extra URLs with `--alias` to declare a fixed set the AI can see immediately at startup via `list_databases` (see <a href="#-dynamic-multi-database">Dynamic Multi-Database</a>). The AI can also register more databases at runtime through the `add_database` MCP tool.
 
-The configuration below starts one process with `default` pointing at SQLite; the AI then registers MySQL, Postgres, etc. as needed:
+**Start a single `default` database (AI registers the rest at runtime):**
 
 ```json
 {
@@ -106,7 +106,7 @@ The configuration below starts one process with `default` pointing at SQLite; th
 }
 ```
 
-If you prefer a fixed alias set declared up front, repeat `--database-url` (one process is enough — the AI only needs the `alias` to know which pool to hit):
+**Pre-declare several databases with explicit aliases (one process, multiple pools):**
 
 ```json
 {
@@ -114,19 +114,19 @@ If you prefer a fixed alias set declared up front, repeat `--database-url` (one 
     "rbdc-mcp": {
       "command": "rbdc-mcp",
       "args": [
-        "--database-url", "sqlite://./database.db",
-        "--database-url", "mysql://user:password@localhost:3306/orders",
-        "--database-url", "postgres://user:password@localhost:5432/analytics",
-        "--database-url", "mssql://user:password@localhost:1433/reporting",
-        "--database-url", "duckdb://path/to/database.duckdb",
-        "--database-url", "turso://database-url?token=your-token"
+        "--database-url", "sqlite://./local.db",                    "--alias", "local",
+        "--database-url", "mysql://user:password@db1:3306/orders",  "--alias", "orders",
+        "--database-url", "postgres://user:password@db2:5432/bi",   "--alias", "bi",
+        "--database-url", "duckdb://./warehouse.duckdb",             "--alias", "warehouse"
       ]
     }
   }
 }
 ```
 
-Or, if you really want one process per database (legacy style, less recommended now that multi-database is supported):
+The first `--alias` value is ignored (the first URL always becomes `default`). The aliases must be unique, non-empty, and not equal to `default` for any URL after the first.
+
+**Legacy style — one process per database (still works, but no longer needed for multi-database access):**
 
 ```json
 {
@@ -158,8 +158,6 @@ Or, if you really want one process per database (legacy style, less recommended 
   }
 }
 ```
-
-**Note:** The `--database-url` repeated form assumes CLI support for multiple `--database-url` flags, which is the planned configuration shape. In the current release, only one URL is accepted on the CLI; use the `add_database` MCP tool to register the rest at runtime.
 </details>
 
 <details>
@@ -199,20 +197,23 @@ type = "stdio"
 enabled = true
 ```
 
-**Database Examples:**
-
-<details>
-<summary><strong>Different Database Examples</strong></summary>
+**Database Examples (single process, multiple databases):**
 
 ```toml
-# Just change --database-url to your actual database URL
+# Pre-declare several databases with explicit aliases
 [mcp_servers.rbdc-mcp]
 command = "rbdc-mcp"
-args = ["--database-url", "sqlite://./database.db"]
+args = [
+  "--database-url", "sqlite://./local.db",                    "--alias", "local",
+  "--database-url", "mysql://user:password@db1:3306/orders",  "--alias", "orders",
+  "--database-url", "postgres://user:password@db2:5432/bi",   "--alias", "bi",
+  "--database-url", "duckdb://./warehouse.duckdb",            "--alias", "warehouse",
+]
 type = "stdio"
 enabled = true
 ```
-</details>
+
+The first URL becomes the `default` alias (its `--alias`, if any, is ignored). Additional URLs must be paired with `--alias` in declaration order. The AI can see every registered alias at startup through the `list_databases` MCP tool, and can also register more databases at runtime through `add_database`.
 
 **Restart:** After saving the config file, restart Codex to load the MCP server. If Codex is already running, run `codex reconnect` to force a reload.
 
@@ -245,7 +246,8 @@ enabled = true
 
 | Parameter | Description | Default |
 |-----------|-------------|---------|
-| `--database-url, -d` | Database connection URL | *Required* |
+| `--database-url, -d` | Database connection URL. Repeat to register multiple databases at startup. | *Required (≥1)* |
+| `--alias` | Alias for the corresponding `--database-url` (declaration order). The first is ignored; later aliases must be unique, non-empty, and not `default`. | auto (`db2`, `db3`, ...) |
 | `--max-connections` | Maximum connection pool size | `1` |
 | `--timeout` | Connection timeout (seconds) | `30` |
 | `--log-level` | Log level (error/warn/info/debug) | `info` |
@@ -272,11 +274,20 @@ enabled = true
 3. `sql_query({ alias: "orders_mysql", sql: "SELECT COUNT(*) FROM orders" })` — route a query to that database. Omit `alias` to use the `default` one.
 4. `remove_database(alias="orders_mysql")` — tear down the pool and unregister the alias when finished.
 
+**Two ways to register databases**
+
+| Path | When | How |
+|---|---|---|
+| **CLI pre-declared** | Stable list, you want the AI to see every database the moment the server boots | Repeat `--database-url` and pair `--alias` for each entry after the first (the first URL becomes `default`). |
+| **Runtime `add_database`** | Ad-hoc / exploratory — the AI discovers the URL and registers it on the fly | The AI calls the `add_database` MCP tool. |
+
+Both paths write into the same in-memory `alias → pool` registry, so the result is identical from the AI's point of view: `list_databases` returns every alias regardless of where it was registered.
+
 **Why this matters**
 
 - One MCP server process, many databases — no need to spawn `rbdc-mcp-mysql`, `rbdc-mcp-postgres`, etc. for each database.
 - All aliases are discoverable via `list_databases`, so the AI can dynamically pick the right target per query.
-- The `default` alias is reserved for the CLI URL and cannot be removed, so the startup database always remains reachable.
+- The `default` alias is reserved for the first `--database-url` and cannot be removed, so the startup database always remains reachable.
 - Each alias has its own independent connection pool — concurrent queries against different aliases do not block each other.
 
 **Example prompt you can give the AI**
