@@ -42,10 +42,17 @@ impl RbdcDatabaseHandler {
         }
     }
 
-    fn convert_params(&self, params: &[serde_json::Value]) -> Vec<rbs::Value> {
+    fn convert_params(&self, params: &[serde_json::Value]) -> Result<Vec<rbs::Value>, McpError> {
         params
             .iter()
-            .map(|v| serde_json::from_value(v.clone()).unwrap_or_default())
+            .map(|v| {
+                serde_json::from_value(v.clone()).map_err(|e| {
+                    McpError::invalid_params(
+                        format!("Failed to convert parameter: {}", e),
+                        None,
+                    )
+                })
+            })
             .collect()
     }
 
@@ -63,7 +70,7 @@ impl RbdcDatabaseHandler {
         }
 
         // Convert parameter types from serde_json::Value to rbs::Value
-        let rbs_params = self.convert_params(&params.params);
+        let rbs_params = self.convert_params(&params.params)?;
 
         match self.db_manager.execute_query(&params.sql, rbs_params).await {
             Ok(results) => {
@@ -93,7 +100,7 @@ impl RbdcDatabaseHandler {
         }
 
         // Convert parameter types from serde_json::Value to rbs::Value
-        let rbs_params = self.convert_params(&params.params);
+        let rbs_params = self.convert_params(&params.params)?;
 
         match self
             .db_manager
