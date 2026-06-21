@@ -80,6 +80,23 @@ cargo install --git https://github.com/rbatis/rbdc-mcp.git --no-default-features
   "mcpServers": {
     "rbdc-mcp": {
       "command": "rbdc-mcp",
+      "args": []
+    }
+  }
+}
+```
+
+`args: []` 表示服务器**启动时不预配任何数据库**。
+AI 在对话中通过 `add_database` 工具动态注册数据库连接
+（详见下方的[动态多库](#-动态多库)）。
+
+如需在启动时预配一个数据库：
+
+```json
+{
+  "mcpServers": {
+    "rbdc-mcp": {
+      "command": "rbdc-mcp",
       "args": ["--database-url", "sqlite://./database.db"]
     }
   }
@@ -248,7 +265,7 @@ enabled = true
 
 | 参数 | 说明 | 默认值 |
 |------|------|--------|
-| `--database-url, -d` | 数据库连接 URL。可重复传入以注册多个数据库。 | *必需（至少 1 个）* |
+| `--database-url, -d` | 数据库连接 URL。省略则启动时不配任何库（运行时通过 `add_database` 动态添加）。可重复传入以预配多个库。 | `None`（可选） |
 | `--alias` | 对应位置 `--database-url` 的别名（按声明顺序配对）。第一个值会被忽略；后续别名需唯一、非空，且不能为 `default`。 | 自动命名（`db2`、`db3` …） |
 | `--max-connections` | 最大连接池大小 | `1` |
 | `--timeout` | 连接超时时间（秒） | `30` |
@@ -270,7 +287,25 @@ enabled = true
 
 ## 🔌 动态多库
 
-`rbdc-mcp` 是**单进程多库**的 MCP 服务器。通过 `--database-url` 传入的数据库在启动时注册为 `default` 别名；AI 可在对话中通过 MCP 工具继续注册更多数据库，并按 `alias` 路由到任意一个。
+`rbdc-mcp` 是**单进程多库**的 MCP 服务器。你可以**不传任何 `--database-url`**
+启动（`args: []`），AI 完全通过 MCP 工具在运行时动态注册数据库。如果传入了
+`--database-url`，则第一个 URL 自动成为 `default` 别名，AI 可在此基础上继续
+添加更多数据库，并按 `alias` 路由到任意一个。
+
+### 零 URL 启动（动态模式）
+
+当启动时不带 `--database-url`，`list_databases` 返回空列表，任何操作指向
+`default` 别名时会提示先使用 `add_database`。AI 可以自行注册第一个（或任意）
+数据库，并选择任何别名：
+
+1. `add_database(alias="inventory", url="sqlite://./inventory.db")` — 注册一个库。
+2. `list_databases` — 确认已注册。
+3. `sql_query({ alias: "inventory", sql: "SELECT * FROM products" })` — 查询。
+
+> **提示**：你也可以用 `alias="default"` 注册第一个库，这样后续查询可以省略
+> `alias` 参数。
+
+### 启动时预配（静态模式）
 
 **AI 的典型调用流程：**
 
@@ -283,8 +318,8 @@ enabled = true
 
 | 方式 | 适用场景 | 做法 |
 |---|---|---|
-| **CLI 启动时预置** | 数据库清单稳定，希望 AI 一启动就能看到全部库 | 重复 `--database-url`，并为除第一项外的每个 URL 配对 `--alias`（第一项 URL 始终为 `default`） |
-| **运行时 `add_database`** | 临时 / 探索性，AI 自行发现 URL 后动态注册 | AI 调用 `add_database` MCP 工具 |
+| **CLI 启动时预置** | 数据库清单稳定，希望 AI 一启动就能看到全部库 | 重复 `--database-url`，配对 `--alias`（第一项 URL 自动为 `default`） |
+| **运行时 `add_database`** | 临时 / 探索性 / 零 URL 启动 | AI 调用 `add_database` MCP 工具 |
 
 两种方式最终都写入同一份内存中的 `alias → pool` 注册表，AI 视角下完全等价：`list_databases` 返回所有已注册别名，来源无关。
 
@@ -292,14 +327,15 @@ enabled = true
 
 - 一个 MCP 进程承载多个数据库 —— 不再需要为每个库各起一个 `rbdc-mcp-mysql` / `rbdc-mcp-postgres` 进程。
 - 所有别名都可被 `list_databases` 枚举，AI 可在每次调用前动态选目标。
-- `default` 别名对应第一项 `--database-url`，不可删除，保证启动库始终可达。
+- 如果传入了 `--database-url`，则 `default` 别名对应第一项 URL，不可删除。
 - 每个别名拥有独立连接池，不同别名之间的并发查询互不阻塞。
 
 **可直接对 AI 说的话**
 
 > "帮我连上 MySQL 订单库 `mysql://root:pwd@10.0.0.5/orders`，按月统计营收。"
 
-AI 会自动调用 `add_database(...)` 注册库，再用 `sql_query(...)` 在该别名上查询，全程不需要重启 MCP 服务器。
+AI 会自动调用 `add_database(...)` 注册库，再用 `sql_query(...)` 在该别名上
+查询，全程不需要重启 MCP 服务器——无论启动时是否带了 `--database-url`。
 
 ## 只读模式
 

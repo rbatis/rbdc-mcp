@@ -175,11 +175,18 @@ impl DatabaseManager {
     /// the process fails fast on a bad URL; the actual pool is created in
     /// [`DatabaseManager::configure_pool`] so pool sizing is known up front
     /// and runtime registration reuses the same code path.
-    pub fn new(url: &str, read_only: bool) -> Result<Self> {
-        log::debug!("Creating DatabaseManager with URL: {}", url);
-        let db_type = DatabaseType::from_url(url)?;
-        log::debug!("Detected database type: {:?}", db_type);
-        let _ = db_type;
+    ///
+    /// When no URL is needed (e.g. dynamic-only usage), pass `None` to
+    /// create an empty manager; databases can be added later via
+    /// `add_database`.
+    pub fn new(url: Option<&str>, read_only: bool) -> Result<Self> {
+        if let Some(url) = url {
+            log::debug!("Creating DatabaseManager with URL: {}", url);
+            let _db_type = DatabaseType::from_url(url)?;
+            log::debug!("Detected database type: {:?}", _db_type);
+        } else {
+            log::debug!("Creating DatabaseManager without URL (dynamic-only)");
+        }
         Ok(Self {
             pools: Arc::new(SyncHashMap::new()),
             max_connections: 1,
@@ -226,7 +233,7 @@ impl DatabaseManager {
     }
 
     /// Remove a database alias. The [`DEFAULT_DB_ALIAS`] alias cannot be
-    /// removed so the CLI-provided database always remains reachable.
+    /// removed (if it exists).
     pub fn remove_database(&self, alias: &str) -> Result<()> {
         let alias = alias.trim();
         if alias == DEFAULT_DB_ALIAS {
@@ -247,7 +254,19 @@ impl DatabaseManager {
         let key = alias.unwrap_or(DEFAULT_DB_ALIAS);
         self.pools
             .get(&key.to_string())
-            .ok_or_else(|| anyhow!("Unknown database alias '{}'", key))
+            .ok_or_else(|| {
+                if self.pools.is_empty() {
+                    anyhow!(
+                        "No databases registered. Use the add_database tool to register one first, \
+                         or start the server with --database-url."
+                    )
+                } else {
+                    anyhow!(
+                        "Unknown database alias '{}'. Use list_databases to see registered aliases.",
+                        key
+                    )
+                }
+            })
     }
 
     /// List registered database aliases with their URL and type.
