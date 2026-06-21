@@ -61,3 +61,7 @@ rbdc-turso = { version = "4.9.0", optional = true }
 
 
 
+# Silence `ld: duplicate symbol '_sqlite3_*'` warnings from bundling SQLite
+# twice (rbdc-sqlite + rbdc-turso).
+[profile.release]
+link-args = ["-Wl,-allow-multiple-definition"]
