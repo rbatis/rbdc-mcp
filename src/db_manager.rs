@@ -55,6 +55,7 @@ impl DatabaseType {
 }
 
 /// Per-alias pool bookkeeping stored in the multi-database registry.
+#[derive(Debug,Clone)]
 struct PoolEntry {
     pool: Arc<FastPool>,
     db_type: DatabaseType,
